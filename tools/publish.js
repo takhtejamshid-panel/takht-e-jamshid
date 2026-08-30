@@ -15,6 +15,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const REPO_NAME = process.env.REPO_NAME || 'takht-e-jamshid';
 const PRIVATE = String(process.env.PRIVATE || 'false') === 'true';
+const FORCE = String(process.env.FORCE || 'false') === 'true';
 const TOKEN = process.env.GITHUB_TOKEN;
 
 const DESCRIPTION = '🏛️ تخت جمشید — پنل مدیریت پروکسی لبه‌ای روی Cloudflare Workers '
@@ -116,7 +117,6 @@ if (repo && repo.full_name) {
     has_projects: false,
     has_wiki: false,
     auto_init: false,
-    license_template: 'mit',
   });
   if (!repo || !repo.full_name) {
     fail('ساخت مخزن ناموفق بود: ' + ((repo && repo.message) || JSON.stringify(repo).slice(0, 300)));
@@ -146,10 +146,38 @@ if (dirty) {
 /* ۶) اتصال remote و ارسال */
 console.log('▸ ارسال شاخه‌ی ' + branch + '…');
 const remoteUrl = 'https://x-access-token:' + TOKEN + '@github.com/' + OWNER + '/' + REPO_NAME + '.git';
-try { git(['remote', 'remove', 'origin']); } catch (e) { /* نبوده */ }
+try { git(['remote', 'remove', 'origin'], { stdio: 'pipe' }); } catch (e) { /* نبوده */ }
 git(['remote', 'add', 'origin', remoteUrl]);
-git(['push', '-u', 'origin', branch], { stdio: 'inherit' });
-console.log('  ✓ ارسال شد');
+
+/* تضمین: حتی در صورت خطا یا توقف، توکن از تنظیمات remote پاک شود */
+const CLEAN_URL = 'https://github.com/' + OWNER + '/' + REPO_NAME + '.git';
+let cleaned = false;
+const cleanRemote = () => {
+  if (cleaned) return;
+  cleaned = true;
+  try { git(['remote', 'set-url', 'origin', CLEAN_URL]); } catch (e) { /* */ }
+};
+process.on('exit', cleanRemote);
+process.on('SIGINT', () => { cleanRemote(); process.exit(130); });
+process.on('uncaughtException', (e) => { cleanRemote(); console.error(e); process.exit(1); });
+
+let pushed = false;
+try {
+  git(['push', '-u', 'origin', branch], { stdio: 'inherit' });
+  pushed = true;
+} catch (e) {
+  // اگر مخزن همین لحظه خالی ساخته شده (commit اولیه‌ی خودکار گیت‌هاب)،
+  // یا کاربر صریحاً FORCE را خواسته باشد، با force ادامه می‌دهیم.
+  if (created || FORCE) {
+    console.log('  ! مخزنِ دور یک commit اولیه دارد — ارسال با force…');
+    try { git(['fetch', 'origin', branch], { stdio: 'pipe' }); } catch (e2) { /* */ }
+    git(['push', '-u', '--force', 'origin', branch], { stdio: 'inherit' });
+    pushed = true;
+  } else {
+    throw e;
+  }
+}
+if (pushed) console.log('  ✓ ارسال شد');
 
 /* ۷) برچسب نسخه (منتشرکننده‌ی Release را فعال می‌کند) */
 const version = require(path.join(ROOT, 'package.json')).version;
@@ -168,7 +196,7 @@ try {
 
 /* ۸) پاک‌سازی: حذف توکن از تنظیمات remote */
 console.log('▸ پاک‌سازی…');
-git(['remote', 'set-url', 'origin', 'https://github.com/' + OWNER + '/' + REPO_NAME + '.git']);
+cleanRemote();
 console.log('  ✓ توکن از تنظیمات remote حذف شد');
 
 /* ------------------------------------------------------------------ */
