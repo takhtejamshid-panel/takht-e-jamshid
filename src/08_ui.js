@@ -304,6 +304,9 @@ const CLIENT_JS = [
   'async function load(){var r=await jget("/state");if(!r.ok){toast(r.error||"خطا در دریافت وضعیت");return}',
   '  S=r; LANG=r.settings.lang||"fa"; document.documentElement.lang=LANG; document.documentElement.dir=(LANG==="fa"?"rtl":"ltr");',
   '  renderOverview(); renderSettings(); renderNetwork(); renderTelegram();',
+  '  if($("sc-host")&&!$("sc-host").value&&r.settings.scanProbeHost)$("sc-host").value=r.settings.scanProbeHost;',
+  '  if($("sc-timeout")&&r.settings.scanTimeout)$("sc-timeout").value=r.settings.scanTimeout;',
+  '  if($("sc-conc")&&r.settings.scanConcurrency)$("sc-conc").value=r.settings.scanConcurrency;',
   '  if(TAB==="users")renderUsers(); if(TAB==="logs")renderLogs(); if(TAB==="endpoints")renderEndpoints();',
   '}',
 
@@ -424,7 +427,7 @@ const CLIENT_JS = [
   + '  +sw("s-autodisable","غیرفعال‌سازی خودکار",s.autoDisable)+sw("s-kill","🛑 کیل‌سوئیچ",s.killSwitch)+"</div>"'
   + ' +"<label>آدرس استتار</label><input id=\\"s-disguise\\" value=\\""+esc(s.disguiseUrl||"")+"\\">"'
   + ' +"<div style=\\"margin-top:14px\\"><button class=\\"btn primary\\" onclick=\\"saveSettings()\\">ذخیره تنظیمات</button></div>";',
-  '  $("s-proto").value=s.protocol;}}',
+  '  $("s-proto").value=s.protocol;}',
 
   'async function saveSettings(){',
   '  var s=S.settings;',
@@ -483,6 +486,76 @@ const CLIENT_JS = [
   '    s.textContent="["+L.level+"] ";d.appendChild(s);',
   '    d.appendChild(document.createTextNode(L.message));c.appendChild(d);}}',
 
+  'var SC={running:false,ips:[],results:[],done:0,total:0};',
+  'function scSorted(){return SC.results.slice().sort(function(a,b){',
+  '  if(a.ok!==b.ok)return a.ok?-1:1;',
+  '  return (Number(a.ms)||99999)-(Number(b.ms)||99999);});}',
+  'function scSelected(){var out=[],bs=document.querySelectorAll(".sc-chk");',
+  '  for(var i=0;i<bs.length;i++){if(bs[i].checked)out.push(bs[i].value);}return out;}',
+  'function renderScanRows(){var tb=$("sc-body");if(!tb)return;tb.innerHTML="";',
+  '  var rows=scSorted();',
+  '  $("sc-empty").classList.toggle("hide",rows.length>0);',
+  '  for(var i=0;i<rows.length;i++){var x=rows[i];var tr=el("tr");',
+  '    var td0=el("td");',
+  '    if(x.ok){var cb=document.createElement("input");cb.type="checkbox";cb.className="sc-chk";',
+  '      cb.value=x.ip;cb.checked=true;cb.style.width="16px";td0.appendChild(cb);}',
+  '    tr.appendChild(td0);',
+  '    var td1=el("td","mono");td1.textContent=x.ip;tr.appendChild(td1);',
+  '    var td2=el("td");td2.textContent=x.colo||"—";tr.appendChild(td2);',
+  '    var td3=el("td");td3.textContent=x.loc||"—";tr.appendChild(td3);',
+  '    var td4=el("td");td4.textContent=x.ms?x.ms+" ms":"—";tr.appendChild(td4);',
+  '    var td5=el("td","muted");td5.textContent=x.tls||"—";tr.appendChild(td5);',
+  '    var td6=el("td");var p=el("span","pill "+(x.ok?"ok":"bad"));',
+  '      p.textContent=x.ok?"سالم":(x.error||"ناموفق");td6.appendChild(p);tr.appendChild(td6);',
+  '    tb.appendChild(tr);}}',
+  'function updateScanProgress(){var c=$("sc-progress");if(!c)return;',
+  '  if(!SC.total){c.innerHTML="";return}',
+  '  var pct=Math.round(SC.done/SC.total*100);',
+  '  var okc=SC.results.filter(function(x){return x.ok}).length;',
+  '  c.innerHTML="";',
+  '  var top=el("div");top.style.display="flex";top.style.justifyContent="space-between";',
+  '  top.style.fontSize="12px";top.style.color="var(--muted)";',
+  '  top.appendChild(el("span",null,SC.done+" / "+SC.total));',
+  '  top.appendChild(el("span",null,okc+" آی‌پی سالم"+(SC.running?"":" · پایان")));',
+  '  c.appendChild(top);',
+  '  var bar=el("div","bar"),fill=el("i");fill.style.width=pct+"%";bar.appendChild(fill);',
+  '  c.appendChild(bar);}',
+  'async function startScan(){',
+  '  if(SC.running){toast("اسکن در حال اجراست");return}',
+  '  var count=Number($("sc-count").value||100);',
+  '  SC.running=true;SC.results=[];SC.done=0;SC.total=0;',
+  '  renderScanRows();updateScanProgress();',
+  '  var r=await jpost("/scan/candidates",{count:count,mode:$("sc-mode").value});',
+  '  if(!r.ok){SC.running=false;return}',
+  '  SC.ips=r.ips||[];SC.total=SC.ips.length;updateScanProgress();',
+  '  while(SC.running&&SC.done<SC.total){',
+  '    var chunk=SC.ips.slice(SC.done,SC.done+20);',
+  '    var pr=await jpost("/scan/probe",{ips:chunk,',
+  '      timeout:Number($("sc-timeout").value||2500),',
+  '      concurrency:Number($("sc-conc").value||8),',
+  '      probeHost:($("sc-host").value||"").trim()});',
+  '    if(pr.ok&&pr.results)SC.results=SC.results.concat(pr.results);',
+  '    SC.done+=chunk.length;',
+  '    renderScanRows();updateScanProgress();',
+  '    await new Promise(function(res){setTimeout(res,80)});',
+  '  }',
+  '  SC.running=false;updateScanProgress();',
+  '  var okc=SC.results.filter(function(x){return x.ok}).length;',
+  '  toast("پایان اسکن: "+okc+" آی‌پی سالم از "+SC.results.length);}',
+  'function stopScan(){SC.running=false;toast("پس از این دسته متوقف می‌شود")}',
+  'async function loadScanCache(){var r=await jget("/scan/cache");if(!r.ok)return;',
+  '  SC.results=r.items||[];SC.done=SC.results.length;SC.total=SC.results.length;',
+  '  renderScanRows();updateScanProgress();toast("بارگیری شد: "+SC.results.length+" رکورد")}',
+  'async function clearScan(){if(!confirm("نتایج ذخیره‌شده پاک شود؟"))return;',
+  '  var r=await jpost("/scan/clear");if(r.ok){SC.results=[];SC.done=0;SC.total=0;',
+  '    renderScanRows();updateScanProgress();toast("پاک شد")}}',
+  'async function applyScan(){var sel=scSelected();',
+  '  if(!sel.length){toast("هیچ آی‌پی‌ای انتخاب نشده است");return}',
+  '  var top=Number($("sc-top").value||0);var chosen=sel;',
+  '  if(top>0){chosen=scSorted().filter(function(x){return sel.indexOf(x.ip)>=0})',
+  '    .slice(0,top).map(function(x){return x.ip});}',
+  '  var r=await jpost("/scan/apply",{ips:chosen,replace:true});',
+  '  if(r.ok){toast("اعمال شد: "+r.count+" آی‌پی");await load()}}',
   'async function doExport(){var r=await jget("/backup/export");',
   '  var b=new Blob([JSON.stringify(r,null,2)],{type:"application/json"});var a=document.createElement("a");',
   '  a.href=URL.createObjectURL(b);a.download="takht-e-jamshid-backup.json";a.click();toast("خروجی گرفته شد")}',
@@ -525,6 +598,7 @@ function renderPanel(state) {
   const nav = [
     ['overview', '🏛️', 'نمای کلی'],
     ['users', '👥', 'کاربران'],
+    ['scanner', '🎯', 'اسکنر آی‌پی'],
     ['endpoints', '🔗', 'نقاط اتصال'],
     ['settings', '⚙️', 'تنظیمات'],
     ['network', '🌐', 'شبکه'],
@@ -620,6 +694,53 @@ function renderPanel(state) {
     + '      </div>'
     + '    </section>'
 
+    + '    <section id="page-scanner" class="page hide">'
+    + '      <div class="card">'
+    + '        <h3>🎯 اسکنر آی‌پی تمیز</h3>'
+    + '        <div class="muted" style="margin-bottom:14px">بازه‌های رسمیِ IPv4 کلودفلر نمونه‌برداری می‌شوند و برای هر آی‌پی، دیتاسنتر، کشور و زمانِ رفت‌وبرگشت از لبه اندازه‌گیری می‌گردد. سپس بهترین‌ها را مستقیماً روی کانفیگ‌ها اعمال کنید.</div>'
+    + '        <div class="row row3">'
+    + '          <div><label>تعداد کاندیدا</label><select id="sc-count">'
+    + '            <option value="50">۵۰</option><option value="100" selected>۱۰۰</option>'
+    + '            <option value="200">۲۰۰</option><option value="500">۵۰۰</option></select></div>'
+    + '          <div><label>روش نمونه‌گیری</label><select id="sc-mode">'
+    + '            <option value="spread">متوازن (پوشش بهتر)</option>'
+    + '            <option value="random">تصادفی</option></select></div>'
+    + '          <div><label>مهلت هر تست (میلی‌ثانیه)</label>'
+    + '            <input id="sc-timeout" type="number" value="2500" min="500" max="10000" step="100"></div>'
+    + '        </div>'
+    + '        <div class="row row2">'
+    + '          <div><label>میزبانِ پروب</label>'
+    + '            <input id="sc-host" placeholder="خالی = خودکار (cloudflare.com)"></div>'
+    + '          <div><label>تعداد اندازه‌گیریِ هم‌زمان</label>'
+    + '            <input id="sc-conc" type="number" value="8" min="1" max="20"></div>'
+    + '        </div>'
+    + '        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">'
+    + '          <button class="btn primary" onclick="startScan()">🎯 شروع اسکن</button>'
+    + '          <button class="btn ghost" onclick="stopScan()">⏹ توقف</button>'
+    + '          <button class="btn ghost" onclick="loadScanCache()">📥 بارگیری ذخیره‌شده</button>'
+    + '          <button class="btn danger" onclick="clearScan()">🗑 پاک‌سازی نتایج</button>'
+    + '        </div>'
+    + '        <div id="sc-progress" style="margin-top:16px"></div>'
+    + '      </div>'
+    + '      <div class="card" style="margin-top:14px">'
+    + '        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    + '          <h3 style="margin:0">📋 نتایج</h3>'
+    + '          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '            <select id="sc-top" style="width:auto">'
+    + '              <option value="5">۵ سریع‌ترین</option>'
+    + '              <option value="10" selected>۱۰ سریع‌ترین</option>'
+    + '              <option value="20">۲۰ سریع‌ترین</option>'
+    + '              <option value="0">همه‌ی انتخاب‌شده‌ها</option></select>'
+    + '            <button class="btn primary" onclick="applyScan()">اعمال روی کانفیگ‌ها</button>'
+    + '          </div>'
+    + '        </div>'
+    + '        <div class="table-wrap"><table><thead><tr>'
+    + '          <th style="width:36px"></th><th>آی‌پی</th><th>دیتاسنتر</th>'
+    + '          <th>کشور</th><th>تأخیر</th><th>TLS</th><th>وضعیت</th>'
+    + '        </tr></thead><tbody id="sc-body"></tbody></table></div>'
+    + '        <div class="empty" id="sc-empty">هنوز اسکنی انجام نشده است.</div>'
+    + '      </div>'
+    + '    </section>'
     + '    <section id="page-settings" class="page hide"><div class="card"><h3>⚙️ تنظیمات</h3><div id="set-body"></div></div></section>'
     + '    <section id="page-network" class="page hide"><div class="card"><h3>🌐 شبکه و آی‌پی تمیز</h3><div id="net-body"></div></div></section>'
     + '    <section id="page-telegram" class="page hide"><div class="card"><h3>✈️ ربات تلگرام</h3><div id="tg-body"></div></div></section>'

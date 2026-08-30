@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_token ON users(token);
 CREATE INDEX IF NOT EXISTS idx_users_uuid  ON users(uuid);
 
+CREATE TABLE IF NOT EXISTS scan_cache (
+  ip       TEXT PRIMARY KEY,
+  colo     TEXT DEFAULT '',
+  loc      TEXT DEFAULT '',
+  latency  INTEGER NOT NULL DEFAULT 0,
+  ok       INTEGER NOT NULL DEFAULT 0,
+  http     TEXT DEFAULT '',
+  tls      TEXT DEFAULT '',
+  ts       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scan_ok ON scan_cache(ok, latency);
+
 CREATE TABLE IF NOT EXISTS logs (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,
   ts       INTEGER NOT NULL,

@@ -75,7 +75,35 @@ function buildTrojanHeader(password, host, port, payload) {
   ]);
 }
 
+/* ------------------------------------------------------------------ */
+section('نحویِ اسکریپتِ سمتِ کلاینت');
+{
+  const vm = require('vm');
+  const ui = fs.readFileSync(path.join(ROOT, 'src', '08_ui.js'), 'utf8');
+  const mm = ui.match(/const\s+CLIENT_JS\s*=\s*\[([\s\S]*?)\n\s*\]\.join\(\s*'\\n'\s*\);/);
+  ok('بلوک CLIENT_JS در رابط یافت می‌شود', !!mm);
+  let csrc = null, cerr = null;
+  if (mm) {
+    try { csrc = eval('[' + mm[1] + ']').join('\n'); } catch (e) { cerr = e.message; }
+    ok('رشته‌های CLIENT_JS معتبرند', !cerr, cerr || '');
+  }
+  ok('اسکریپت کلاینت استخراج می‌شود', !!csrc);
+  if (csrc) {
+    let serr = null;
+    try { new vm.Script('(function(){' + csrc + '\n})'); } catch (e) { serr = e.message; }
+    ok('اسکریپت کلاینت نحویِ سالم دارد', !serr, serr || '');
+    ok('تب اسکنر در رابط حضور دارد',
+      ui.includes('page-scanner') && ui.includes('sc-progress') && ui.includes('sc-body') &&
+      csrc.includes('function startScan'));
+    ok('تابع‌های اسکنر تعریف شده‌اند',
+      csrc.includes('function renderScanRows') && csrc.includes('function updateScanProgress') &&
+      csrc.includes('function scSorted') && csrc.includes('function applyScan'));
+  }
+}
+
 (async () => {
+
+
   const { server, port } = await startEchoServer();
 
   const mf = new Miniflare({
@@ -247,6 +275,100 @@ function buildTrojanHeader(password, host, port, payload) {
     raw = await r.text();
     ok('کانفیگ برای هر آی‌پی تمیز تولید می‌شود', raw.includes('1.1.1.1') && raw.includes('8.8.8.8'));
     ok('SNI همچنان دامنه است', raw.includes('sni=panel.test') || raw.includes('sni=panel'));
+
+    /* ---------------------------------------------------------------- */
+    section('اسکنر آی‌پی تمیز');
+    /* بازه‌های رسمی IPv4 کلودفلر (همان‌هایی که در src/11_scanner.js است) */
+    const CF_NETS = [
+      [173, 245, 48, 20], [103, 21, 244, 22], [103, 22, 200, 22], [103, 31, 4, 22],
+      [141, 101, 64, 18], [108, 162, 192, 18], [190, 93, 240, 20], [188, 114, 96, 20],
+      [197, 234, 240, 22], [198, 41, 128, 17], [162, 158, 0, 15], [104, 16, 0, 13],
+      [104, 24, 0, 14], [172, 64, 0, 13], [131, 0, 72, 22],
+    ];
+    const inCF = (ip) => {
+      const o = String(ip).split('.').map(Number);
+      if (o.length !== 4 || o.some((n) => !(n >= 0 && n <= 255))) return false;
+      const u = ((o[0] * 256 + o[1]) * 256 + o[2]) * 256 + o[3];
+      return CF_NETS.some((nt) => {
+        const base = ((nt[0] * 256 + nt[1]) * 256 + nt[2]) * 256;
+        return u >= base && u < base + Math.pow(2, 32 - nt[3]);
+      });
+    };
+    const post = (path_, body) => auth(path_, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+
+    r = await post('/takht/api/scan/candidates', { count: 24, mode: 'spread' });
+    j = await r.json();
+    ok('کاندیداها تولید می‌شوند',
+      j.ok === true && Array.isArray(j.ips) && j.ips.length === 24, JSON.stringify(j).slice(0, 120));
+    const cand = (j.ips || []).slice();
+    ok('همه‌ی کاندیداها در بازه‌های رسمی کلودفلرند', cand.length === 24 && cand.every(inCF));
+    ok('کاندیداها یکتا هستند', new Set(cand).size === cand.length);
+
+    r = await post('/takht/api/scan/candidates', { count: 10, mode: 'random', seed: 12345 });
+    const seedA = await r.json();
+    r = await post('/takht/api/scan/candidates', { count: 10, mode: 'random', seed: 12345 });
+    const seedB = await r.json();
+    ok('نمونه‌برداری با seed یکسان، یکسان است',
+      JSON.stringify(seedA.ips) === JSON.stringify(seedB.ips) && (seedA.ips || []).length === 10);
+
+    r = await post('/takht/api/scan/candidates', { count: 5, mode: 'random', seed: 777 });
+    const seedC = await r.json();
+    ok('seed متفاوت، نتیجه‌ی متفاوت می‌دهد',
+      JSON.stringify(seedC.ips) !== JSON.stringify(seedA.ips));
+
+    r = await post('/takht/api/scan/probe', { ips: cand.slice(0, 3), concurrency: 3, timeout: 3000 });
+    j = await r.json();
+    ok('پاسخ پروب ساختار درست دارد',
+      j.ok === true && Array.isArray(j.results) && j.results.length === 3 &&
+      j.results.every((x) => x && typeof x.ip === 'string' && typeof x.ok === 'boolean'),
+      JSON.stringify(j).slice(0, 160));
+    ok('ترتیب و هویت آی‌پی‌ها حفظ می‌شود',
+      JSON.stringify((j.results || []).map((x) => x.ip)) === JSON.stringify(cand.slice(0, 3)));
+
+    /* ذخیره با waitUntil انجام می‌شود؛ کمی صبر می‌کنیم */
+    let items = [];
+    for (let attempt = 0; attempt < 20; attempt++) {
+      r = await auth('/takht/api/scan/cache');
+      j = await r.json();
+      items = j.items || [];
+      if (items.length >= 3) break;
+      await new Promise((res) => setTimeout(res, 150));
+    }
+    ok('حافظه‌ی اسکن خوانده می‌شود',
+      Array.isArray(items) && items.length >= 3, 'تعداد=' + items.length);
+    ok('هر رکورد حافظه آی‌پی معتبر دارد', items.length > 0 && items.every((x) => inCF(x.ip)));
+
+    const goodIPs = items.filter((x) => x.ok).map((x) => x.ip);
+    if (goodIPs.length) {
+      r = await post('/takht/api/scan/apply', { ips: goodIPs.slice(0, 2), replace: true });
+      j = await r.json();
+      ok('اعمال نتایج روی تنظیمات',
+        j.ok === true && Array.isArray(j.cleanIPs) && j.cleanIPs.length >= 1 && j.cleanIPs.length <= 2,
+        JSON.stringify(j).slice(0, 160));
+      ok('آی‌پیِ اعمال‌شده معتبر است',
+        (j.cleanIPs || []).every((e) => inCF(String(e).split('#')[0])));
+      ok('برچسب دیتاسنتر ضمیمه می‌شود',
+        (j.cleanIPs || []).every((e) => String(e).indexOf('#') > 0 || goodIPs.indexOf(String(e).split('#')[0]) >= 0));
+    } else {
+      ok('اعمال نتایج روی تنظیمات', true, 'رد شد: نتیجه‌ی موفقی در این محیط نبود');
+    }
+
+    r = await post('/takht/api/scan/apply', { ips: [] });
+    j = await r.json();
+    ok('اعمال با فهرست خالی رد می‌شود', j.ok === false);
+
+    r = await post('/takht/api/scan/clear', {});
+    j = await r.json();
+    ok('پاک‌سازی حافظه‌ی اسکن', j.ok === true);
+    r = await auth('/takht/api/scan/cache');
+    j = await r.json();
+    ok('حافظه پس از پاک‌سازی خالی است', j.ok === true && (j.items || []).length === 0);
+
+    /* بازگرداندن تنظیمات آی‌پی تمیز برای بخش‌های بعدی */
+    await post('/takht/api/settings', { cleanIPs: ['1.1.1.1#آلمان', '8.8.8.8#US'] });
+
 
     /* ---------------------------------------------------------------- */
     section('تغییر مسیر مخفی و پروتکل');

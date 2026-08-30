@@ -115,6 +115,33 @@ const SAMPLE_USERS = [
 
   fs.writeFileSync(path.join(PREVIEW_DIR, 'panel-preview.html'), html);
 
+  /* ---------- پیش‌نمایشِ تبِ اسکنر با داده‌ی نمونه ---------- */
+  const SCAN_SAMPLE = [
+    { ip: '162.159.192.1', colo: 'FRA', loc: 'DE', ms: 34,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '172.66.40.7',   colo: 'AMS', loc: 'NL', ms: 41,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '188.114.97.12', colo: 'CDG', loc: 'FR', ms: 47,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '104.16.5.5',    colo: 'SJC', loc: 'US', ms: 112, ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '141.101.65.9',  colo: 'LHR', loc: 'GB', ms: 58,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '108.162.193.3', colo: 'DXB', loc: 'AE', ms: 29,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '172.64.80.1',   colo: 'SIN', loc: 'SG', ms: 63,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '198.41.129.4',  colo: 'NRT', loc: 'JP', ms: 88,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '197.234.241.2', colo: 'ARN', loc: 'SE', ms: 73,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '131.0.72.11',   colo: 'IST', loc: 'TR', ms: 52,  ok: true,  tls: 'TLSv1.3', http: 200, ts: Date.now() },
+    { ip: '103.21.244.9',  colo: '',    loc: '',   ms: 0,   ok: false, tls: '',       http: 0,   error: 'مهلت تمام شد', ts: Date.now() },
+    { ip: '190.93.241.6',  colo: '',    loc: '',   ms: 0,   ok: false, tls: '',       http: 0,   error: 'مهلت تمام شد', ts: Date.now() },
+  ];
+  const htmlScan = html.replace(
+    'go("overview");',
+    'SC={running:false,ips:[],results:' + JSON.stringify(SCAN_SAMPLE)
+      + ',done:' + SCAN_SAMPLE.length + ',total:' + SCAN_SAMPLE.length + '};'
+      + 'renderScanRows();updateScanProgress();go("scanner");'
+  );
+  if (htmlScan !== html) {
+    fs.writeFileSync(path.join(PREVIEW_DIR, 'scanner-preview.html'), htmlScan);
+  } else {
+    console.log('  ! تزریق تب اسکنر انجام نشد — لنگر go("overview") یافت نشد');
+  }
+
   // صفحه ورود
   let login = await (await req('/takht/login')).text();
   fs.writeFileSync(path.join(PREVIEW_DIR, 'login-preview.html'), login.replace(/http:\/\/panel\.test/g, FAKE_HOST).replace(/panel\.test/g,'takht-e-jamshid.example.workers.dev'));

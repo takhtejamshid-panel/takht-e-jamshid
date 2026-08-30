@@ -90,6 +90,11 @@ const DEFAULT_SETTINGS = {
   // فرگمنت (عبور از DPI)
   fragment: { enabled: false, length: 100, interval: 10 },
 
+  // اسکنر آی‌پی تمیز
+  scanProbeHost: '',        // خالی = خودکار (میزبان پنل، سپس cloudflare.com)
+  scanTimeout: 2500,        // مهلت هر اندازه‌گیری (میلی‌ثانیه)
+  scanConcurrency: 8,       // تعداد اندازه‌گیری هم‌زمان
+
   // محدودیت‌ها
   subFormats: ['auto', 'base64', 'clash', 'singbox'],
 };
@@ -164,6 +169,21 @@ const I18N = {
     danger: 'ناحیه خطر',
     account: 'حساب',
     logoutTitle: 'خروج از پنل',
+    scanner: 'اسکنر آی‌پی',
+    scanStart: 'شروع اسکن',
+    scanStop: 'توقف',
+    scanCandidates: 'تعداد کاندیدا',
+    scanMode: 'روش نمونه‌گیری',
+    scanBalanced: 'متوازن (پوشش بهتر)',
+    scanRandom: 'تصادفی',
+    scanTimeout: 'مهلت هر تست (میلی‌ثانیه)',
+    scanHost: 'میزبانِ پروب',
+    scanConcurrency: 'تعداد هم‌زمان',
+    scanDatacenter: 'دیتاسنتر',
+    scanLatency: 'تأخیر',
+    scanApply: 'اعمال روی کانفیگ‌ها',
+    scanClear: 'پاک‌سازی نتایج',
+    scanLoaded: 'بارگیری نتایج ذخیره‌شده',
   },
   en: {
     login: 'Sign in to Takht-e Jamshid',

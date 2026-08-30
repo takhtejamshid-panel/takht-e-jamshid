@@ -51,6 +51,7 @@ function publicSettings(s) {
     autoDisable: s.autoDisable, killSwitch: s.killSwitch, naming: s.naming,
     disguiseUrl: s.disguiseUrl, tgEnabled: s.tgEnabled, tgToken: s.tgToken,
     tgChatId: s.tgChatId, lang: s.lang, theme: s.theme,
+    scanProbeHost: s.scanProbeHost, scanTimeout: s.scanTimeout, scanConcurrency: s.scanConcurrency,
   };
 }
 
@@ -163,6 +164,80 @@ async function apiPassword(env, settings, password) {
   await saveSettings(env, settings);
   await addLog(env, 'warn', 'گذرواژه پنل تغییر کرد', 'panel');
   return jsonResponse({ ok: true });
+}
+
+/* --------------------------- اسکنر آی‌پی تمیز --------------------------- */
+
+async function apiScan(env, ctx, settings, action, body, hostInfo) {
+  switch (action) {
+    case 'candidates': {
+      const count = clamp(Number(body.count) || 100, 1, 2000);
+      const ips = generateCandidates({
+        count,
+        mode: body.mode === 'random' ? 'random' : 'spread',
+        ranges: Array.isArray(body.ranges) && body.ranges.length ? body.ranges : null,
+        seed: Number(body.seed) || 0,
+      });
+      return jsonResponse({ ok: true, count: ips.length, ips });
+    }
+
+    case 'probe': {
+      const ips = Array.isArray(body.ips) ? body.ips : [];
+      if (!ips.length) return jsonResponse({ ok: false, error: 'فهرست آی‌پی خالی است' }, 400);
+      const results = await probeBatch(env, settings, ips, {
+        concurrency: Number(body.concurrency) || settings.scanConcurrency || 8,
+        timeout: Number(body.timeout) || settings.scanTimeout || 2500,
+        probeHost: String(body.probeHost || '').trim() || settings.scanProbeHost || '',
+      });
+      if (ctx && ctx.waitUntil) ctx.waitUntil(saveScanResults(env, results));
+      else await saveScanResults(env, results);
+      return jsonResponse({ ok: true, results });
+    }
+
+    case 'cache': {
+      const items = await getScanCache(env, Number(body && body.limit) || 300);
+      return jsonResponse({ ok: true, items });
+    }
+
+    case 'apply': {
+      const ips = Array.isArray(body.ips) ? body.ips.slice(0, 128) : [];
+      if (!ips.length) return jsonResponse({ ok: false, error: 'هیچ آی‌پی‌ای انتخاب نشده است' }, 400);
+      const cache = await getScanCache(env, 2000);
+      const map = Object.create(null);
+      for (const c of cache) map[c.ip] = c;
+
+      const entries = ips.map(ip => {
+        const c = map[ip];
+        return (c && c.ok) ? (ip + '#' + ipLabel(c)) : String(ip);
+      });
+
+      const merged = body.replace === false
+        ? (settings.cleanIPs || []).concat(entries)
+        : entries;
+
+      // حذف تکراری‌ها بر اساس خودِ آی‌پی
+      const uniq = [];
+      const seen = Object.create(null);
+      for (const e of merged) {
+        const key = String(e).split('#')[0];
+        if (seen[key]) continue;
+        seen[key] = 1;
+        uniq.push(e);
+      }
+      settings.cleanIPs = uniq.slice(0, 128);
+      await saveSettings(env, settings);
+      await addLog(env, 'info', 'اعمال ' + uniq.length + ' آی‌پی تمیز از اسکنر', 'panel');
+      return jsonResponse({ ok: true, count: uniq.length, cleanIPs: settings.cleanIPs });
+    }
+
+    case 'clear': {
+      await clearScanCache(env);
+      return jsonResponse({ ok: true });
+    }
+
+    default:
+      return jsonResponse({ ok: false, error: 'عملیات اسکن نامشخص' }, 400);
+  }
 }
 
 async function apiTelegram(env, ctx, settings, action, hostInfo) {

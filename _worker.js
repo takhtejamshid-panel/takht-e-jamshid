@@ -105,6 +105,11 @@ const DEFAULT_SETTINGS = {
   // فرگمنت (عبور از DPI)
   fragment: { enabled: false, length: 100, interval: 10 },
 
+  // اسکنر آی‌پی تمیز
+  scanProbeHost: '',        // خالی = خودکار (میزبان پنل، سپس cloudflare.com)
+  scanTimeout: 2500,        // مهلت هر اندازه‌گیری (میلی‌ثانیه)
+  scanConcurrency: 8,       // تعداد اندازه‌گیری هم‌زمان
+
   // محدودیت‌ها
   subFormats: ['auto', 'base64', 'clash', 'singbox'],
 };
@@ -179,6 +184,21 @@ const I18N = {
     danger: 'ناحیه خطر',
     account: 'حساب',
     logoutTitle: 'خروج از پنل',
+    scanner: 'اسکنر آی‌پی',
+    scanStart: 'شروع اسکن',
+    scanStop: 'توقف',
+    scanCandidates: 'تعداد کاندیدا',
+    scanMode: 'روش نمونه‌گیری',
+    scanBalanced: 'متوازن (پوشش بهتر)',
+    scanRandom: 'تصادفی',
+    scanTimeout: 'مهلت هر تست (میلی‌ثانیه)',
+    scanHost: 'میزبانِ پروب',
+    scanConcurrency: 'تعداد هم‌زمان',
+    scanDatacenter: 'دیتاسنتر',
+    scanLatency: 'تأخیر',
+    scanApply: 'اعمال روی کانفیگ‌ها',
+    scanClear: 'پاک‌سازی نتایج',
+    scanLoaded: 'بارگیری نتایج ذخیره‌شده',
   },
   en: {
     login: 'Sign in to Takht-e Jamshid',
@@ -568,6 +588,18 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS idx_users_token ON users(token);
 CREATE INDEX IF NOT EXISTS idx_users_uuid  ON users(uuid);
+
+CREATE TABLE IF NOT EXISTS scan_cache (
+  ip       TEXT PRIMARY KEY,
+  colo     TEXT DEFAULT '',
+  loc      TEXT DEFAULT '',
+  latency  INTEGER NOT NULL DEFAULT 0,
+  ok       INTEGER NOT NULL DEFAULT 0,
+  http     TEXT DEFAULT '',
+  tls      TEXT DEFAULT '',
+  ts       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scan_ok ON scan_cache(ok, latency);
 
 CREATE TABLE IF NOT EXISTS logs (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2661,6 +2693,9 @@ const CLIENT_JS = [
   'async function load(){var r=await jget("/state");if(!r.ok){toast(r.error||"خطا در دریافت وضعیت");return}',
   '  S=r; LANG=r.settings.lang||"fa"; document.documentElement.lang=LANG; document.documentElement.dir=(LANG==="fa"?"rtl":"ltr");',
   '  renderOverview(); renderSettings(); renderNetwork(); renderTelegram();',
+  '  if($("sc-host")&&!$("sc-host").value&&r.settings.scanProbeHost)$("sc-host").value=r.settings.scanProbeHost;',
+  '  if($("sc-timeout")&&r.settings.scanTimeout)$("sc-timeout").value=r.settings.scanTimeout;',
+  '  if($("sc-conc")&&r.settings.scanConcurrency)$("sc-conc").value=r.settings.scanConcurrency;',
   '  if(TAB==="users")renderUsers(); if(TAB==="logs")renderLogs(); if(TAB==="endpoints")renderEndpoints();',
   '}',
 
@@ -2781,7 +2816,7 @@ const CLIENT_JS = [
   + '  +sw("s-autodisable","غیرفعال‌سازی خودکار",s.autoDisable)+sw("s-kill","🛑 کیل‌سوئیچ",s.killSwitch)+"</div>"'
   + ' +"<label>آدرس استتار</label><input id=\\"s-disguise\\" value=\\""+esc(s.disguiseUrl||"")+"\\">"'
   + ' +"<div style=\\"margin-top:14px\\"><button class=\\"btn primary\\" onclick=\\"saveSettings()\\">ذخیره تنظیمات</button></div>";',
-  '  $("s-proto").value=s.protocol;}}',
+  '  $("s-proto").value=s.protocol;}',
 
   'async function saveSettings(){',
   '  var s=S.settings;',
@@ -2840,6 +2875,76 @@ const CLIENT_JS = [
   '    s.textContent="["+L.level+"] ";d.appendChild(s);',
   '    d.appendChild(document.createTextNode(L.message));c.appendChild(d);}}',
 
+  'var SC={running:false,ips:[],results:[],done:0,total:0};',
+  'function scSorted(){return SC.results.slice().sort(function(a,b){',
+  '  if(a.ok!==b.ok)return a.ok?-1:1;',
+  '  return (Number(a.ms)||99999)-(Number(b.ms)||99999);});}',
+  'function scSelected(){var out=[],bs=document.querySelectorAll(".sc-chk");',
+  '  for(var i=0;i<bs.length;i++){if(bs[i].checked)out.push(bs[i].value);}return out;}',
+  'function renderScanRows(){var tb=$("sc-body");if(!tb)return;tb.innerHTML="";',
+  '  var rows=scSorted();',
+  '  $("sc-empty").classList.toggle("hide",rows.length>0);',
+  '  for(var i=0;i<rows.length;i++){var x=rows[i];var tr=el("tr");',
+  '    var td0=el("td");',
+  '    if(x.ok){var cb=document.createElement("input");cb.type="checkbox";cb.className="sc-chk";',
+  '      cb.value=x.ip;cb.checked=true;cb.style.width="16px";td0.appendChild(cb);}',
+  '    tr.appendChild(td0);',
+  '    var td1=el("td","mono");td1.textContent=x.ip;tr.appendChild(td1);',
+  '    var td2=el("td");td2.textContent=x.colo||"—";tr.appendChild(td2);',
+  '    var td3=el("td");td3.textContent=x.loc||"—";tr.appendChild(td3);',
+  '    var td4=el("td");td4.textContent=x.ms?x.ms+" ms":"—";tr.appendChild(td4);',
+  '    var td5=el("td","muted");td5.textContent=x.tls||"—";tr.appendChild(td5);',
+  '    var td6=el("td");var p=el("span","pill "+(x.ok?"ok":"bad"));',
+  '      p.textContent=x.ok?"سالم":(x.error||"ناموفق");td6.appendChild(p);tr.appendChild(td6);',
+  '    tb.appendChild(tr);}}',
+  'function updateScanProgress(){var c=$("sc-progress");if(!c)return;',
+  '  if(!SC.total){c.innerHTML="";return}',
+  '  var pct=Math.round(SC.done/SC.total*100);',
+  '  var okc=SC.results.filter(function(x){return x.ok}).length;',
+  '  c.innerHTML="";',
+  '  var top=el("div");top.style.display="flex";top.style.justifyContent="space-between";',
+  '  top.style.fontSize="12px";top.style.color="var(--muted)";',
+  '  top.appendChild(el("span",null,SC.done+" / "+SC.total));',
+  '  top.appendChild(el("span",null,okc+" آی‌پی سالم"+(SC.running?"":" · پایان")));',
+  '  c.appendChild(top);',
+  '  var bar=el("div","bar"),fill=el("i");fill.style.width=pct+"%";bar.appendChild(fill);',
+  '  c.appendChild(bar);}',
+  'async function startScan(){',
+  '  if(SC.running){toast("اسکن در حال اجراست");return}',
+  '  var count=Number($("sc-count").value||100);',
+  '  SC.running=true;SC.results=[];SC.done=0;SC.total=0;',
+  '  renderScanRows();updateScanProgress();',
+  '  var r=await jpost("/scan/candidates",{count:count,mode:$("sc-mode").value});',
+  '  if(!r.ok){SC.running=false;return}',
+  '  SC.ips=r.ips||[];SC.total=SC.ips.length;updateScanProgress();',
+  '  while(SC.running&&SC.done<SC.total){',
+  '    var chunk=SC.ips.slice(SC.done,SC.done+20);',
+  '    var pr=await jpost("/scan/probe",{ips:chunk,',
+  '      timeout:Number($("sc-timeout").value||2500),',
+  '      concurrency:Number($("sc-conc").value||8),',
+  '      probeHost:($("sc-host").value||"").trim()});',
+  '    if(pr.ok&&pr.results)SC.results=SC.results.concat(pr.results);',
+  '    SC.done+=chunk.length;',
+  '    renderScanRows();updateScanProgress();',
+  '    await new Promise(function(res){setTimeout(res,80)});',
+  '  }',
+  '  SC.running=false;updateScanProgress();',
+  '  var okc=SC.results.filter(function(x){return x.ok}).length;',
+  '  toast("پایان اسکن: "+okc+" آی‌پی سالم از "+SC.results.length);}',
+  'function stopScan(){SC.running=false;toast("پس از این دسته متوقف می‌شود")}',
+  'async function loadScanCache(){var r=await jget("/scan/cache");if(!r.ok)return;',
+  '  SC.results=r.items||[];SC.done=SC.results.length;SC.total=SC.results.length;',
+  '  renderScanRows();updateScanProgress();toast("بارگیری شد: "+SC.results.length+" رکورد")}',
+  'async function clearScan(){if(!confirm("نتایج ذخیره‌شده پاک شود؟"))return;',
+  '  var r=await jpost("/scan/clear");if(r.ok){SC.results=[];SC.done=0;SC.total=0;',
+  '    renderScanRows();updateScanProgress();toast("پاک شد")}}',
+  'async function applyScan(){var sel=scSelected();',
+  '  if(!sel.length){toast("هیچ آی‌پی‌ای انتخاب نشده است");return}',
+  '  var top=Number($("sc-top").value||0);var chosen=sel;',
+  '  if(top>0){chosen=scSorted().filter(function(x){return sel.indexOf(x.ip)>=0})',
+  '    .slice(0,top).map(function(x){return x.ip});}',
+  '  var r=await jpost("/scan/apply",{ips:chosen,replace:true});',
+  '  if(r.ok){toast("اعمال شد: "+r.count+" آی‌پی");await load()}}',
   'async function doExport(){var r=await jget("/backup/export");',
   '  var b=new Blob([JSON.stringify(r,null,2)],{type:"application/json"});var a=document.createElement("a");',
   '  a.href=URL.createObjectURL(b);a.download="takht-e-jamshid-backup.json";a.click();toast("خروجی گرفته شد")}',
@@ -2882,6 +2987,7 @@ function renderPanel(state) {
   const nav = [
     ['overview', '🏛️', 'نمای کلی'],
     ['users', '👥', 'کاربران'],
+    ['scanner', '🎯', 'اسکنر آی‌پی'],
     ['endpoints', '🔗', 'نقاط اتصال'],
     ['settings', '⚙️', 'تنظیمات'],
     ['network', '🌐', 'شبکه'],
@@ -2977,6 +3083,53 @@ function renderPanel(state) {
     + '      </div>'
     + '    </section>'
 
+    + '    <section id="page-scanner" class="page hide">'
+    + '      <div class="card">'
+    + '        <h3>🎯 اسکنر آی‌پی تمیز</h3>'
+    + '        <div class="muted" style="margin-bottom:14px">بازه‌های رسمیِ IPv4 کلودفلر نمونه‌برداری می‌شوند و برای هر آی‌پی، دیتاسنتر، کشور و زمانِ رفت‌وبرگشت از لبه اندازه‌گیری می‌گردد. سپس بهترین‌ها را مستقیماً روی کانفیگ‌ها اعمال کنید.</div>'
+    + '        <div class="row row3">'
+    + '          <div><label>تعداد کاندیدا</label><select id="sc-count">'
+    + '            <option value="50">۵۰</option><option value="100" selected>۱۰۰</option>'
+    + '            <option value="200">۲۰۰</option><option value="500">۵۰۰</option></select></div>'
+    + '          <div><label>روش نمونه‌گیری</label><select id="sc-mode">'
+    + '            <option value="spread">متوازن (پوشش بهتر)</option>'
+    + '            <option value="random">تصادفی</option></select></div>'
+    + '          <div><label>مهلت هر تست (میلی‌ثانیه)</label>'
+    + '            <input id="sc-timeout" type="number" value="2500" min="500" max="10000" step="100"></div>'
+    + '        </div>'
+    + '        <div class="row row2">'
+    + '          <div><label>میزبانِ پروب</label>'
+    + '            <input id="sc-host" placeholder="خالی = خودکار (cloudflare.com)"></div>'
+    + '          <div><label>تعداد اندازه‌گیریِ هم‌زمان</label>'
+    + '            <input id="sc-conc" type="number" value="8" min="1" max="20"></div>'
+    + '        </div>'
+    + '        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">'
+    + '          <button class="btn primary" onclick="startScan()">🎯 شروع اسکن</button>'
+    + '          <button class="btn ghost" onclick="stopScan()">⏹ توقف</button>'
+    + '          <button class="btn ghost" onclick="loadScanCache()">📥 بارگیری ذخیره‌شده</button>'
+    + '          <button class="btn danger" onclick="clearScan()">🗑 پاک‌سازی نتایج</button>'
+    + '        </div>'
+    + '        <div id="sc-progress" style="margin-top:16px"></div>'
+    + '      </div>'
+    + '      <div class="card" style="margin-top:14px">'
+    + '        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    + '          <h3 style="margin:0">📋 نتایج</h3>'
+    + '          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '            <select id="sc-top" style="width:auto">'
+    + '              <option value="5">۵ سریع‌ترین</option>'
+    + '              <option value="10" selected>۱۰ سریع‌ترین</option>'
+    + '              <option value="20">۲۰ سریع‌ترین</option>'
+    + '              <option value="0">همه‌ی انتخاب‌شده‌ها</option></select>'
+    + '            <button class="btn primary" onclick="applyScan()">اعمال روی کانفیگ‌ها</button>'
+    + '          </div>'
+    + '        </div>'
+    + '        <div class="table-wrap"><table><thead><tr>'
+    + '          <th style="width:36px"></th><th>آی‌پی</th><th>دیتاسنتر</th>'
+    + '          <th>کشور</th><th>تأخیر</th><th>TLS</th><th>وضعیت</th>'
+    + '        </tr></thead><tbody id="sc-body"></tbody></table></div>'
+    + '        <div class="empty" id="sc-empty">هنوز اسکنی انجام نشده است.</div>'
+    + '      </div>'
+    + '    </section>'
     + '    <section id="page-settings" class="page hide"><div class="card"><h3>⚙️ تنظیمات</h3><div id="set-body"></div></div></section>'
     + '    <section id="page-network" class="page hide"><div class="card"><h3>🌐 شبکه و آی‌پی تمیز</h3><div id="net-body"></div></div></section>'
     + '    <section id="page-telegram" class="page hide"><div class="card"><h3>✈️ ربات تلگرام</h3><div id="tg-body"></div></div></section>'
@@ -3086,6 +3239,7 @@ function publicSettings(s) {
     autoDisable: s.autoDisable, killSwitch: s.killSwitch, naming: s.naming,
     disguiseUrl: s.disguiseUrl, tgEnabled: s.tgEnabled, tgToken: s.tgToken,
     tgChatId: s.tgChatId, lang: s.lang, theme: s.theme,
+    scanProbeHost: s.scanProbeHost, scanTimeout: s.scanTimeout, scanConcurrency: s.scanConcurrency,
   };
 }
 
@@ -3198,6 +3352,80 @@ async function apiPassword(env, settings, password) {
   await saveSettings(env, settings);
   await addLog(env, 'warn', 'گذرواژه پنل تغییر کرد', 'panel');
   return jsonResponse({ ok: true });
+}
+
+/* --------------------------- اسکنر آی‌پی تمیز --------------------------- */
+
+async function apiScan(env, ctx, settings, action, body, hostInfo) {
+  switch (action) {
+    case 'candidates': {
+      const count = clamp(Number(body.count) || 100, 1, 2000);
+      const ips = generateCandidates({
+        count,
+        mode: body.mode === 'random' ? 'random' : 'spread',
+        ranges: Array.isArray(body.ranges) && body.ranges.length ? body.ranges : null,
+        seed: Number(body.seed) || 0,
+      });
+      return jsonResponse({ ok: true, count: ips.length, ips });
+    }
+
+    case 'probe': {
+      const ips = Array.isArray(body.ips) ? body.ips : [];
+      if (!ips.length) return jsonResponse({ ok: false, error: 'فهرست آی‌پی خالی است' }, 400);
+      const results = await probeBatch(env, settings, ips, {
+        concurrency: Number(body.concurrency) || settings.scanConcurrency || 8,
+        timeout: Number(body.timeout) || settings.scanTimeout || 2500,
+        probeHost: String(body.probeHost || '').trim() || settings.scanProbeHost || '',
+      });
+      if (ctx && ctx.waitUntil) ctx.waitUntil(saveScanResults(env, results));
+      else await saveScanResults(env, results);
+      return jsonResponse({ ok: true, results });
+    }
+
+    case 'cache': {
+      const items = await getScanCache(env, Number(body && body.limit) || 300);
+      return jsonResponse({ ok: true, items });
+    }
+
+    case 'apply': {
+      const ips = Array.isArray(body.ips) ? body.ips.slice(0, 128) : [];
+      if (!ips.length) return jsonResponse({ ok: false, error: 'هیچ آی‌پی‌ای انتخاب نشده است' }, 400);
+      const cache = await getScanCache(env, 2000);
+      const map = Object.create(null);
+      for (const c of cache) map[c.ip] = c;
+
+      const entries = ips.map(ip => {
+        const c = map[ip];
+        return (c && c.ok) ? (ip + '#' + ipLabel(c)) : String(ip);
+      });
+
+      const merged = body.replace === false
+        ? (settings.cleanIPs || []).concat(entries)
+        : entries;
+
+      // حذف تکراری‌ها بر اساس خودِ آی‌پی
+      const uniq = [];
+      const seen = Object.create(null);
+      for (const e of merged) {
+        const key = String(e).split('#')[0];
+        if (seen[key]) continue;
+        seen[key] = 1;
+        uniq.push(e);
+      }
+      settings.cleanIPs = uniq.slice(0, 128);
+      await saveSettings(env, settings);
+      await addLog(env, 'info', 'اعمال ' + uniq.length + ' آی‌پی تمیز از اسکنر', 'panel');
+      return jsonResponse({ ok: true, count: uniq.length, cleanIPs: settings.cleanIPs });
+    }
+
+    case 'clear': {
+      await clearScanCache(env);
+      return jsonResponse({ ok: true });
+    }
+
+    default:
+      return jsonResponse({ ok: false, error: 'عملیات اسکن نامشخص' }, 400);
+  }
 }
 
 async function apiTelegram(env, ctx, settings, action, hostInfo) {
@@ -3354,6 +3582,9 @@ export default {
       const group = parts[0] || '';
 
       if (request.method === 'GET' && group === 'state') return apiState(env, settings, hostInfo);
+      if (request.method === 'GET' && group === 'scan' && parts[1] === 'cache') {
+        return apiScan(env, ctx, settings, 'cache', {}, hostInfo);
+      }
       if (request.method === 'GET' && group === 'logs') return jsonResponse({ ok: true, logs: await listLogs(env, 300) });
       if (request.method === 'GET' && group === 'link' && parts[1]) return apiLink(env, settings, parts[1], hostInfo);
       if (request.method === 'GET' && group === 'qr' && parts[1]) return apiQr(env, settings, parts[1], hostInfo);
@@ -3365,6 +3596,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (group === 'settings') return apiSaveSettings(env, settings, body, ctx);
         if (group === 'users' && parts[1]) return apiUsers(env, settings, parts[1], body, ctx);
+        if (group === 'scan' && parts[1]) return apiScan(env, ctx, settings, parts[1], body, hostInfo);
         if (group === 'password') return apiPassword(env, settings, body.password);
         if (group === 'telegram') return apiTelegram(env, ctx, settings, parts[1], hostInfo);
         if (group === 'backup' && parts[1] === 'import') {
@@ -3426,5 +3658,279 @@ async function apiStateInternal(env, settings, hostInfo) {
       expireAt: u.expireAt, enabled: u.enabled, deviceLimit: u.deviceLimit, note: u.note,
     })),
   };
+}
+
+/* ---------- 11_scanner.js --------------------------------------------- */
+/* ==========================================================================
+   11_scanner.js — اسکنر آی‌پی تمیز
+   --------------------------------------------------------------------------
+   ایده: به‌جای حدس زدن، از قابلیت resolveOverride در fetchِ کلودفلر استفاده
+   می‌کنیم. برای هر آی‌پیِ کاندید، یک درخواستِ واقعی به
+       https://<میزبانِ پروب>/cdn-cgi/trace
+   می‌فرستیم ولی آدرسِ مقصد را به آن آی‌پی «تحمیل» می‌کنیم. پاسخِ لبه‌ی کلودفلر
+   شامل colo (دیتاسنتر)، loc (کشور)، نسخه‌ی TLS و زمانِ رفت‌وبرگشت است.
+   نتیجه: می‌فهمیم هر آی‌پی کدام دیتاسنتر است، زنده است یا نه، و چقدر تند است.
+
+   محدودیتِ صادقانه: این اندازه‌گیری از «لبه‌ی کلودفلر» انجام می‌شود، نه از شبکه‌ی
+   کاربرِ نهایی. پس بهترین کاربردش پیدا کردنِ دیتاسنترهای نزدیک و سالم است؛
+   تشخیصِ قطعیِ فیلترینگِ یک ISP خاص فقط با تست در کلاینتِ خود کاربر ممکن است.
+   ========================================================================== */
+
+/* بازه‌های رسمیِ IPv4 کلودفلر (منبع: https://www.cloudflare.com/ips-v4) */
+const CF_IPV4_RANGES = [
+  '173.245.48.0/20',
+  '103.21.244.0/22',
+  '103.22.200.0/22',
+  '103.31.4.0/22',
+  '141.101.64.0/18',
+  '108.162.192.0/18',
+  '190.93.240.0/20',
+  '188.114.96.0/20',
+  '197.234.240.0/22',
+  '198.41.128.0/17',
+  '162.158.0.0/15',
+  '104.16.0.0/13',
+  '104.24.0.0/14',
+  '172.64.0.0/13',
+  '131.0.72.0/22',
+];
+
+/* --------------------------- کار با آدرس‌ها --------------------------- */
+
+function ipToUint(ip) {
+  const p = String(ip).trim().split('.');
+  if (p.length !== 4) return 0;
+  return ((Number(p[0]) << 24) >>> 0) + (Number(p[1]) << 16) + (Number(p[2]) << 8) + Number(p[3]);
+}
+
+function uintToIp(n) {
+  n = n >>> 0;
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+}
+
+function parseCidr(cidr) {
+  const m = String(cidr).trim().match(/^(\d+\.\d+\.\d+\.\d+)\/(\d{1,2})$/);
+  if (!m) return null;
+  const bits = Number(m[2]);
+  if (bits < 8 || bits > 32) return null;
+  const base = ipToUint(m[1]);
+  const size = Math.pow(2, 32 - bits);
+  return { cidr: m[1] + '/' + bits, base: (base & ~(size - 1)) >>> 0, size };
+}
+
+/* یک مولد اعداد شبه‌تصادفی سبک (xorshift32) برای نمونه‌گیریِ تکرارپذیر */
+function makeRandom(seed) {
+  let s = (Number(seed) || 1) >>> 0;
+  if (s === 0) s = 0x9e3779b9;
+  return function () {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+/**
+ * تولید فهرست آی‌پی‌های کاندید
+ * mode = 'spread' | 'random'
+ *   spread: نمونه‌ها را به‌طور متوازن بین بازه‌ها پخش می‌کند (پوشش بهتر)
+ *   random: انتخاب کاملاً تصادفی (متنوع‌تر)
+ */
+function generateCandidates(opts) {
+  const o = opts || {};
+  const count = clamp(Number(o.count) || 100, 1, 2000);
+  const list = (Array.isArray(o.ranges) && o.ranges.length ? o.ranges : CF_IPV4_RANGES)
+    .map(parseCidr).filter(Boolean);
+  if (!list.length) return [];
+
+  const rnd = makeRandom(o.seed || (Date.now() & 0x7fffffff));
+  const out = [];
+  const seen = Object.create(null);
+
+  const push = (ip) => {
+    if (seen[ip]) return;
+    seen[ip] = 1;
+    out.push(ip);
+  };
+
+  if (o.mode === 'random') {
+    // وزن‌دهی بر اساس اندازه‌ی هر بازه
+    const total = list.reduce((a, r) => a + r.size, 0);
+    let guard = 0;
+    while (out.length < count && guard < count * 40) {
+      guard++;
+      let x = Math.floor(rnd() * total);
+      let picked = list[list.length - 1];
+      for (const r of list) { if (x < r.size) { picked = r; break; } x -= r.size; }
+      push(uintToIp((picked.base + Math.floor(rnd() * picked.size)) >>> 0));
+    }
+  } else {
+    // پخش متوازن: از هر بازه به نسبتِ اندازه سهم می‌گیریم
+    const total = list.reduce((a, r) => a + r.size, 0);
+    for (const r of list) {
+      const share = Math.max(1, Math.round(count * (r.size / total)));
+      for (let i = 0; i < share && out.length < count; i++) {
+        // گامِ ثابت + کمی جابه‌جایی تصادفی ⇒ پراکندگی یکنواخت
+        const step = Math.floor(r.size / share);
+        const offset = (i * step + Math.floor(rnd() * Math.max(1, step))) % r.size;
+        push(uintToIp((r.base + offset) >>> 0));
+      }
+    }
+    // اگر هنوز کم داریم (گرد کردن)، تصادفی پر کن
+    let guard = 0;
+    while (out.length < count && guard < count * 20) {
+      guard++;
+      const r = list[Math.floor(rnd() * list.length)];
+      push(uintToIp((r.base + Math.floor(rnd() * r.size)) >>> 0));
+    }
+  }
+  return out.slice(0, count);
+}
+
+/* ------------------------------- اندازه‌گیری ------------------------------- */
+
+function parseTrace(text) {
+  const out = {};
+  for (const line of String(text).split('\n')) {
+    const i = line.indexOf('=');
+    if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return out;
+}
+
+async function timedFetch(url, init, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => { try { ctrl.abort(); } catch (e) { /* */ } }, ms);
+  try {
+    return await fetch(url, Object.assign({}, init, { signal: ctrl.signal }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * اندازه‌گیری یک آی‌پی
+ * @returns {{ip:string, ok:boolean, ms:number, colo:string, loc:string, http:string, error:string}}
+ */
+async function probeIP(env, settings, ip, timeoutMs, probeHost) {
+  const ms = clamp(Number(timeoutMs) || (settings.scanTimeout || 2500), 500, 10000);
+  const host = String(probeHost || settings.scanProbeHost || '').trim() || 'cloudflare.com';
+  const url = 'https://' + host + '/cdn-cgi/trace';
+  const started = Date.now();
+
+  const result = { ip, ok: false, ms: 0, colo: '', loc: '', http: '', tls: '', error: '' };
+  let res = null;
+  try {
+    res = await timedFetch(url, {
+      method: 'GET',
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; Takht-e-Jamshid-Scanner/' + VERSION + ')' },
+      cf: { resolveOverride: ip },
+      redirect: 'follow',
+    }, ms);
+  } catch (e) {
+    result.ms = Date.now() - started;
+    result.error = 'timeout';
+    return result;
+  }
+
+  result.ms = Date.now() - started;
+  if (!res.ok) {
+    result.error = 'http-' + res.status;
+    return result;
+  }
+  let text = '';
+  try { text = await res.text(); } catch (e) { result.error = 'read'; return result; }
+
+  const tr = parseTrace(text);
+  result.colo = tr.colo || '';
+  result.loc = tr.loc || '';
+  result.http = tr.http || '';
+  result.tls = tr.tls || '';
+  // اگر پاسخ معتبر نبود (مثلاً صفحه‌ای دیگر برگشته)، ناموفق حساب کن
+  result.ok = !!result.colo;
+  if (!result.ok) result.error = 'no-trace';
+  return result;
+}
+
+/** اجرای دسته‌ای با محدودیتِ هم‌زمانی */
+async function probeBatch(env, settings, ips, opts) {
+  const o = opts || {};
+  const concurrency = clamp(Number(o.concurrency) || (settings.scanConcurrency || 8), 1, 20);
+  const timeoutMs = Number(o.timeout) || settings.scanTimeout || 2500;
+  const probeHost = o.probeHost || settings.scanProbeHost || '';
+  const list = (Array.isArray(ips) ? ips : []).filter(isIPv4).slice(0, 20);
+
+  const results = new Array(list.length);
+  let cursor = 0;
+
+  const worker = async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= list.length) return;
+      try {
+        results[i] = await probeIP(env, settings, list[i], timeoutMs, probeHost);
+      } catch (e) {
+        results[i] = { ip: list[i], ok: false, ms: 0, colo: '', loc: '', http: '', tls: '', error: 'error' };
+      }
+    }
+  };
+
+  const pool = [];
+  for (let i = 0; i < Math.min(concurrency, list.length); i++) pool.push(worker());
+  await Promise.all(pool);
+  return results.filter(Boolean);
+}
+
+/* ------------------------------ ذخیره‌ی نتایج ------------------------------ */
+
+async function saveScanResults(env, results) {
+  const d = env && env.DB ? env.DB : null;
+  if (!d) return 0;
+  await dbInit(env);
+  const now = nowMs();
+  const seen = Object.create(null);
+  const stmts = [];
+  for (const r of results) {
+    if (!r || !r.ip || seen[r.ip]) continue;
+    seen[r.ip] = 1;
+    stmts.push(d.prepare(
+      'INSERT INTO scan_cache (ip, colo, loc, latency, ok, http, tls, ts) VALUES (?,?,?,?,?,?,?,?) '
+      + 'ON CONFLICT(ip) DO UPDATE SET colo=excluded.colo, loc=excluded.loc, latency=excluded.latency, '
+      + 'ok=excluded.ok, http=excluded.http, tls=excluded.tls, ts=excluded.ts'
+    ).bind(r.ip, r.colo || '', r.loc || '', Number(r.ms) || 0, r.ok ? 1 : 0,
+           r.http || '', r.tls || '', now));
+    if (stmts.length >= 40) { await d.batch(stmts); stmts.length = 0; }
+  }
+  if (stmts.length) await d.batch(stmts);
+  return Object.keys(seen).length;
+}
+
+async function getScanCache(env, limit) {
+  const d = env && env.DB ? env.DB : null;
+  if (!d) return [];
+  await dbInit(env);
+  const res = await d.prepare('SELECT * FROM scan_cache ORDER BY ts DESC LIMIT ?')
+    .bind(clamp(limit || 300, 1, 2000)).all();
+  return (res.results || []).map(r => ({
+    ip: r.ip, colo: r.colo || '', loc: r.loc || '',
+    latency: Number(r.latency) || 0, ok: Number(r.ok) === 1,
+    http: r.http || '', tls: r.tls || '', ts: Number(r.ts) || 0,
+  }));
+}
+
+async function clearScanCache(env) {
+  const d = env && env.DB ? env.DB : null;
+  if (!d) return false;
+  await dbInit(env);
+  await d.prepare('DELETE FROM scan_cache').run();
+  return true;
+}
+
+/** ساخت برچسبِ خوانا برای هر آی‌پی: «COLO · کشور» */
+function ipLabel(item) {
+  const parts = [];
+  if (item.colo) parts.push(item.colo);
+  if (item.loc) parts.push(item.loc);
+  return parts.length ? parts.join('-') : (item.ip || '');
 }
 

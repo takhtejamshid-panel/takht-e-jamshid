@@ -137,6 +137,9 @@ export default {
       const group = parts[0] || '';
 
       if (request.method === 'GET' && group === 'state') return apiState(env, settings, hostInfo);
+      if (request.method === 'GET' && group === 'scan' && parts[1] === 'cache') {
+        return apiScan(env, ctx, settings, 'cache', {}, hostInfo);
+      }
       if (request.method === 'GET' && group === 'logs') return jsonResponse({ ok: true, logs: await listLogs(env, 300) });
       if (request.method === 'GET' && group === 'link' && parts[1]) return apiLink(env, settings, parts[1], hostInfo);
       if (request.method === 'GET' && group === 'qr' && parts[1]) return apiQr(env, settings, parts[1], hostInfo);
@@ -148,6 +151,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (group === 'settings') return apiSaveSettings(env, settings, body, ctx);
         if (group === 'users' && parts[1]) return apiUsers(env, settings, parts[1], body, ctx);
+        if (group === 'scan' && parts[1]) return apiScan(env, ctx, settings, parts[1], body, hostInfo);
         if (group === 'password') return apiPassword(env, settings, body.password);
         if (group === 'telegram') return apiTelegram(env, ctx, settings, parts[1], hostInfo);
         if (group === 'backup' && parts[1] === 'import') {
