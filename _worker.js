@@ -33,7 +33,7 @@ import { connect } from 'cloudflare:sockets';
      10_main.js        مسیریاب اصلی و نقطه ورود
    ========================================================================== */
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.2';
 const PANEL_FA = 'تخت جمشید';
 const PANEL_EN = 'Takht-e Jamshid';
 const PANEL_TAG = 'پنل لبه‌ای پارسه';

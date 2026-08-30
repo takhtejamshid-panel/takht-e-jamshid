@@ -30,9 +30,20 @@ const banner = [
   '',
 ].join('\n');
 
+/* نسخه را از package.json می‌گیریم تا با ثابتِ VERSION در 01_meta.js همگام بماند */
+const pkg = require('./package.json');
+
 let body = '';
 for (const f of files) {
-  const content = fs.readFileSync(path.join(SRC, f), 'utf8');
+  let content = fs.readFileSync(path.join(SRC, f), 'utf8');
+  if (f === '01_meta.js') {
+    const before = content;
+    content = content.replace(/const VERSION\s*=\s*'[^']*'/, "const VERSION = '" + pkg.version + "'");
+    if (content === before) {
+      console.error('✗ ثابتِ VERSION در 01_meta.js پیدا نشد');
+      process.exit(1);
+    }
+  }
   body += '/* ---------- ' + f + ' ' + '-'.repeat(Math.max(0, 58 - f.length)) + ' */\n';
   body += content.replace(/\s+$/, '\n');
   body += '\n';

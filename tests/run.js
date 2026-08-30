@@ -92,7 +92,16 @@ section('نحویِ اسکریپتِ سمتِ کلاینت');
     let serr = null;
     try { new vm.Script('(function(){' + csrc + '\n})'); } catch (e) { serr = e.message; }
     ok('اسکریپت کلاینت نحویِ سالم دارد', !serr, serr || '');
-    ok('تب اسکنر در رابط حضور دارد',
+    /* نسخه‌ی باندل باید با package.json یکی باشد */
+  {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const bundle = fs.readFileSync(path.join(ROOT, '_worker.js'), 'utf8');
+    const m = bundle.match(/const VERSION\s*=\s*'([^']*)'/);
+    ok('نسخه‌ی باندل با package.json همگام است',
+      m && m[1] === pkg.version, (m ? m[1] : 'یافت نشد') + ' در برابر ' + pkg.version);
+  }
+
+  ok('تب اسکنر در رابط حضور دارد',
       ui.includes('page-scanner') && ui.includes('sc-progress') && ui.includes('sc-body') &&
       csrc.includes('function startScan'));
     ok('تابع‌های اسکنر تعریف شده‌اند',
