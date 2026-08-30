@@ -1,0 +1,27 @@
+{
+  "name": "takht-e-jamshid",
+  "version": "0.1.0",
+  "description": "تخت جمشید — پنل مدیریت پروکسی لبه‌ای روی Cloudflare Workers (VLESS / Trojan)",
+  "main": "_worker.js",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node tests/test_qr.js && node tests/run.js",
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "preview": "node tools/preview.js"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "vless",
+    "trojan",
+    "panel",
+    "persepolis",
+    "persian"
+  ],
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "miniflare": "^3.20241106.1"
+  }
+}

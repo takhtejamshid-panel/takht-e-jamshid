@@ -1,0 +1,55 @@
+name: ساخت و تست
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: تجمیع و آزمون
+    runs-on: ubuntu-latest
+    steps:
+      - name: دریافت کد
+        uses: actions/checkout@v4
+
+      - name: نصب Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: نصب وابستگی‌ها
+        run: npm ci
+
+      - name: تجمیع در _worker.js
+        run: node build.js
+
+      - name: بررسی نحوی
+        run: |
+          cp _worker.js /tmp/syntax-check.mjs
+          node --check /tmp/syntax-check.mjs
+          echo "«نحویِ بدون خطا»"
+
+      - name: اطمینان از به‌روز بودن فایل تجمیع‌شده
+        run: |
+          git diff --exit-code -- _worker.js || {
+            echo "::error::فایل _worker.js با پوشه‌ی src هم‌خوان نیست. دستور node build.js را اجرا و نتیجه را commit کنید."
+            exit 1
+          }
+
+      - name: نصب کتابخانه مرجع QR
+        run: npm install --no-save qrcode@1.5.4
+
+      - name: اجرای تست‌ها
+        run: npm test
+
+      - name: بارگذاری فایل تجمیع‌شده
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: _worker.js
+          path: _worker.js
+          retention-days: 7

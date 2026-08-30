@@ -1,0 +1,81 @@
+name: انتشار نسخه
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'برچسب نسخه (مثال: v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: ساخت و انتشار
+    runs-on: ubuntu-latest
+    steps:
+      - name: دریافت کد
+        uses: actions/checkout@v4
+
+      - name: نصب Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: نصب وابستگی‌ها
+        run: npm ci
+
+      - name: تعیین برچسب نسخه
+        id: tag
+        run: echo "value=${{ inputs.tag || github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: تجمیع
+        run: node build.js
+
+      - name: نصب کتابخانه مرجع QR
+        run: npm install --no-save qrcode@1.5.4
+
+      - name: اجرای تست‌ها
+        run: npm test
+
+      - name: بستن بسته‌ی انتشار
+        run: |
+          mkdir -p dist
+          cp _worker.js dist/_worker.js
+          cp README.md dist/README.md
+          cp LICENSE dist/LICENSE
+          cp schema.sql dist/schema.sql
+          cp wrangler.toml dist/wrangler.toml
+          cd dist && zip -r ../takht-e-jamshid-${{ steps.tag.outputs.value }}.zip . && cd ..
+
+      - name: انتشار در گیت‌هاب
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: تخت جمشید ${{ steps.tag.outputs.value }}
+          draft: false
+          prerelease: false
+          body: |
+            ## 🏛️ تخت جمشید ${{ steps.tag.outputs.value }}
+
+            ### نصب سریع
+            1. در کلودفلر یک Worker بسازید.
+            2. محتوای `_worker.js` را در ادیتور پیست کنید و Deploy بزنید.
+            3. یک دیتابیس D1 ساخته و با نام دقیقِ **`DB`** به Worker متصل کنید.
+            4. به `https://<آدرس-ورکر>/takht/dash` بروید (ورود پیش‌فرض: `admin` / `admin`).
+
+            > پس از ورود، حتماً گذرواژه و **مسیر مخفی** را تغییر دهید و نشانک کنید.
+
+            ### محتویات
+            - `_worker.js` — فایل کامل و آماده‌ی استقرار
+            - `schema.sql` — ساختار پایگاه داده (برای مرور یا بازیابی دستی)
+            - `wrangler.toml` — نمونه پیکربندی برای استقرار با CLI
+          files: |
+            _worker.js
+            takht-e-jamshid-${{ steps.tag.outputs.value }}.zip

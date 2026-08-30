@@ -1,0 +1,68 @@
+name: گزارش اشکال
+description: مشکلی در نصب یا اجرای پنل پیدا کرده‌اید
+title: "[اشکال] "
+labels: ["bug"]
+body:
+  - type: markdown
+    value: |
+      سپاس از وقتی که می‌گذارید. لطفاً پیش از ارسال، [بخش رفع اشکال](../../README.md#-رفع-اشکال) را بخوانید.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: چه اتفاقی افتاد؟
+      description: رفتار مشاهده‌شده را دقیق بنویسید.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: انتظار داشتید چه شود؟
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: گام‌های بازتولید
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: روش استقرار
+      options:
+        - کپی‌پیست در داشبورد کلودفلر
+        - Wrangler (CLI)
+        - Pages
+        - سایر
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: نسخه‌ی پنل
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: گزارش‌ها / پیام‌های خطا
+      description: خروجی کنسول یا بخش «گزارش‌ها» در پنل را اینجا بگذارید.
+      render: text
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: پیش از ارسال
+      options:
+        - label: اطلاعات حساس (توکن، لینک اشتراک، دامنه) را از گزارش حذف کرده‌ام
+          required: true

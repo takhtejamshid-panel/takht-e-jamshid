@@ -1,0 +1,177 @@
+<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>تخت جمشید | ورود</title><style>
+:root{
+  --gold:#d9b45b; --gold-2:#f0dca0; --gold-dark:#8c6d21;
+  --lapis:#1b3a6b; --lapis-2:#24478f;
+  --turq:#3fd0c9; --stone:#14110d; --stone-2:#1c1813; --stone-3:#262017;
+  --cream:#f3e9d2; --muted:#a99e86;
+  --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --line:rgba(217,180,91,.22);
+  --card:rgba(30,25,18,.86);
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(27,58,107,.35), transparent 60%),
+    radial-gradient(900px 500px at 0% 100%, rgba(217,180,91,.10), transparent 60%),
+    linear-gradient(160deg,#0f0d0a 0%, #17140f 50%, #100e0b 100%);
+  background-attachment:fixed;
+  color:var(--cream);
+  font-family:"Vazirmatn","IRANSans","Shabnam",Tahoma,"Segoe UI",system-ui,sans-serif;
+  min-height:100vh; font-size:14px; line-height:1.7;
+}
+body.light{
+  background:
+    radial-gradient(1000px 500px at 85% -10%, rgba(36,71,143,.12), transparent 60%),
+    linear-gradient(160deg,#f7f1e3 0%,#efe6d2 100%);
+  color:#2a2418; --card:rgba(255,252,245,.94); --line:rgba(140,109,33,.28); --muted:#6b6152;
+}
+a{color:var(--turq);text-decoration:none}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(217,180,91,.28);border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- طرح تزیینی پارسه ---------- */
+.frieze{height:14px;width:100%;opacity:.55;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='14' viewBox='0 0 40 14'><path d='M0 13 L6 3 L12 13 L18 3 L24 13 L30 3 L36 13 L40 7' fill='none' stroke='%23d9b45b' stroke-width='1'/></svg>");
+  background-repeat:repeat-x;}
+
+/* ---------- ورود ---------- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);
+  border-radius:20px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.55);backdrop-filter:blur(8px)}
+.login-card .hero{display:block;margin:0 auto 10px}
+.login-title{text-align:center;font-size:19px;font-weight:700;letter-spacing:.4px}
+.login-sub{text-align:center;color:var(--muted);font-size:12px;margin-bottom:18px}
+
+/* ---------- چیدمان ---------- */
+.app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+.sidebar{border-inline-end:1px solid var(--line);padding:18px 14px;background:rgba(0,0,0,.22);
+  backdrop-filter:blur(6px);position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+.brand h1{font-size:15px;margin:0;letter-spacing:.3px}
+.brand small{display:block;color:var(--muted);font-size:10.5px;font-weight:400}
+.nav{display:flex;flex-direction:column;gap:3px;margin-top:16px}
+.nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:9px;padding:9px 11px;
+  border-radius:10px;color:var(--muted);font-size:13px;transition:.15s;width:100%}
+.nav button:hover{background:rgba(217,180,91,.09);color:var(--cream)}
+.nav button.active{background:linear-gradient(90deg,rgba(217,180,91,.20),rgba(217,180,91,.04));
+  color:var(--gold-2);box-shadow:inset 0 0 0 1px rgba(217,180,91,.25)}
+.nav .sep{height:1px;background:var(--line);margin:10px 4px}
+.main{padding:20px 24px 60px;max-width:1180px}
+
+/* ---------- نوار بالا ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:16px;flex-wrap:wrap}
+.topbar h2{margin:0;font-size:20px;letter-spacing:.3px}
+.topbar .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ---------- کارت‌ها ---------- */
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{position:static;height:auto}
+  .g4,.g3,.g2{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.g4,.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+  position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(217,180,91,.5),transparent)}
+.card h3{margin:0 0 10px;font-size:13.5px;color:var(--gold-2);letter-spacing:.3px;
+  display:flex;align-items:center;gap:7px}
+.stat .label{color:var(--muted);font-size:11.5px}
+.stat .value{font-size:22px;font-weight:700;letter-spacing:.5px;margin-top:4px}
+.stat .hint{font-size:11px;color:var(--muted);margin-top:2px}
+.bar{height:6px;border-radius:6px;background:rgba(217,180,91,.14);overflow:hidden;margin-top:9px}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--turq))}
+
+/* ---------- فرم‌ها ---------- */
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
+input,select,textarea{width:100%;padding:9px 11px;border-radius:10px;
+  background:rgba(0,0,0,.30);border:1px solid var(--line);color:var(--cream);
+  font-family:inherit;font-size:13px;outline:none;transition:.15s}
+body.light input,body.light select,body.light textarea{background:rgba(255,255,255,.75);color:#241f16}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,91,.14)}
+textarea{min-height:96px;resize:vertical;direction:ltr;text-align:left;font-size:12px;line-height:1.6}
+.row{display:grid;gap:10px}
+.row2{grid-template-columns:1fr 1fr}
+.row3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:720px){.row2,.row3{grid-template-columns:1fr}}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 0;border-bottom:1px dashed var(--line)}
+.switch:last-child{border-bottom:0}
+.toggle{width:44px;height:24px;border-radius:24px;background:rgba(255,255,255,.12);
+  position:relative;cursor:pointer;transition:.2s;flex:0 0 auto;border:0}
+.toggle::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:18px;height:18px;
+  border-radius:50%;background:var(--cream);transition:.2s}
+.toggle.on{background:linear-gradient(90deg,var(--gold),var(--turq))}
+.toggle.on::after{transform:translateX(20px)}
+body[dir="rtl"] .toggle.on::after{transform:translateX(-20px)}
+
+/* ---------- دکمه‌ها ---------- */
+.btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:10px;font-size:12.5px;
+  background:linear-gradient(180deg,rgba(217,180,91,.22),rgba(217,180,91,.08));
+  border:1px solid rgba(217,180,91,.35);color:var(--gold-2);transition:.15s;white-space:nowrap}
+.btn:hover{background:linear-gradient(180deg,rgba(217,180,91,.34),rgba(217,180,91,.14));
+  transform:translateY(-1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn.primary{background:linear-gradient(135deg,var(--gold),#b8912f);color:#1b1508;font-weight:700;border-color:transparent}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--muted)}
+.btn.ghost:hover{color:var(--cream);border-color:var(--gold)}
+.btn.danger{border-color:rgba(248,113,113,.45);color:var(--bad);background:rgba(248,113,113,.10)}
+.btn.sm{padding:5px 9px;font-size:11.5px}
+.btn.block{width:100%;justify-content:center}
+
+/* ---------- جدول ---------- */
+.table-wrap{overflow:auto;border-radius:12px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+th,td{padding:10px 12px;text-align:start;border-bottom:1px solid var(--line);vertical-align:middle}
+th{background:rgba(217,180,91,.07);color:var(--gold-2);font-weight:600;font-size:11.5px;
+  position:sticky;top:0;backdrop-filter:blur(4px)}
+tbody tr:hover{background:rgba(217,180,91,.05)}
+tbody tr:last-child td{border-bottom:0}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10.5px;border:1px solid}
+.pill.ok{color:var(--ok);border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.10)}
+.pill.bad{color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.10)}
+.pill.warn{color:var(--warn);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.10)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;direction:ltr}
+.ellipsis{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+
+/* ---------- مودال ---------- */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;padding:20px;z-index:60}
+.mask.show{display:flex}
+.modal{width:100%;max-width:520px;max-height:86vh;overflow:auto;background:var(--card);
+  border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.modal h3{margin:0 0 14px;color:var(--gold-2);font-size:15px}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+/* ---------- QR ---------- */
+.qrbox{background:#f7f1e3;padding:14px;border-radius:14px;display:inline-block;line-height:0}
+.qrbox img{width:190px;height:190px;display:block}
+.qrrow{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+
+/* ---------- متفرقه ---------- */
+.toast{position:fixed;bottom:22px;inset-inline-start:50%;transform:translate(-50%,80px);
+  background:linear-gradient(135deg,var(--gold),#b8912f);color:#1b1508;padding:10px 20px;
+  border-radius:12px;font-size:13px;font-weight:600;opacity:0;transition:.25s;z-index:99;
+  box-shadow:0 12px 34px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.muted{color:var(--muted);font-size:11.5px}
+.hide{display:none !important}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tabs button{all:unset;cursor:pointer;padding:6px 13px;border-radius:99px;font-size:12px;
+  border:1px solid var(--line);color:var(--muted)}
+.tabs button.active{background:rgba(217,180,91,.18);color:var(--gold-2);border-color:var(--gold)}
+.linkbox{display:flex;gap:8px;align-items:center}
+.linkbox input{flex:1}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.kv:last-child{border-bottom:0}
+.kv b{font-weight:600;direction:ltr}
+.logline{font-size:11.5px;padding:5px 0;border-bottom:1px dashed var(--line);direction:ltr;text-align:left}
+.empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:12.5px}
+</style></head><body><div class="login-wrap"><div class="login-card"><svg class="hero" width="228" height="86" viewBox="0 0 228 86" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="تخت جمشید"><defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0dca0"/><stop offset=".55" stop-color="#d9b45b"/><stop offset="1" stop-color="#8c6d21"/></linearGradient><linearGradient id="g2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3fd0c9"/><stop offset="1" stop-color="#1b3a6b"/></linearGradient></defs><rect x="14" y="72" width="200" height="7" rx="2" fill="url(#g1)"/><rect x="24" y="64" width="180" height="7" rx="2" fill="url(#g1)" opacity=".72"/><rect x="52" y="34" width="11" height="31" fill="url(#g1)"/><rect x="165" y="34" width="11" height="31" fill="url(#g1)"/><rect x="55.5" y="34" width="1.2" height="31" fill="#8c6d21" opacity=".5"/><rect x="168.5" y="34" width="1.2" height="31" fill="#8c6d21" opacity=".5"/><path d="M40 34h35v-4l-9-7 9-7h-35z" fill="url(#g1)"/><path d="M153 34h35v-18h-35l9 7-9 7z" fill="url(#g1)"/><g transform="translate(114 22)"><circle r="7" fill="url(#g1)"/><circle r="3" fill="#14110d" opacity=".45"/><path d="M-7 0c-9-2-18-6-31-12 11 1 20 4 31 9z" fill="url(#g1)" opacity=".95"/><path d="M7 0c9-2 18-6 31-12-11 1-20 4-31 9z" fill="url(#g1)" opacity=".95"/><path d="M-7 2c-8 1-15 4-25 9 9-1 17-3 25-6z" fill="url(#g1)" opacity=".6"/><path d="M7 2c8 1 15 4 25 9-9-1-17-3-25-6z" fill="url(#g1)" opacity=".6"/><path d="M-2 7l-6 11 6-3 6 3z" fill="url(#g1)" opacity=".8"/></g><g opacity=".5" fill="#d9b45b"><rect x="76" y="74" width="9" height="2"/><rect x="90" y="74" width="5" height="2"/><rect x="99" y="74" width="12" height="2"/><rect x="117" y="74" width="7" height="2"/><rect x="128" y="74" width="11" height="2"/><rect x="143" y="74" width="4" height="2"/></g></svg><div class="frieze" style="margin:12px 0 16px"></div><div class="login-title">تخت جمشید</div><div class="login-sub">پنل لبه‌ای پارسه · نسخه 0.1.0</div><form method="post" action="/takht/login"><label>نام کاربری</label><input name="user" autocomplete="username" autocapitalize="off" required><label>گذرواژه</label><input name="pass" type="password" autocomplete="current-password" required><button class="btn primary block" style="margin-top:18px" type="submit">ورود به پنل</button></form><div class="muted" style="text-align:center;margin-top:14px">پیش‌فرض: admin / admin — پس از ورود حتماً تغییر دهید</div></div></div></body></html>

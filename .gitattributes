@@ -1,0 +1,11 @@
+# تضمین پایان‌خطِ یکسان در همه‌ی سیستم‌عامل‌ها
+* text=auto eol=lf
+
+# فایل‌هایی که نباید در آمار زبان حساب شوند
+preview/** linguist-generated
+package-lock.json linguist-generated
+
+# نمایش درستِ تفاوت‌ها
+*.js   diff=javascript
+*.md   diff=markdown
+*.sql  diff=sql

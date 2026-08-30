@@ -1,0 +1,53 @@
+# انتشار پیش‌نمایشِ طراحی روی GitHub Pages
+# این گردش‌کار دستی است: از تب Actions آن را اجرا کنید، سپس در تنظیمات مخزن
+# مسیر Pages را روی شاخه‌ی gh-pages تنظیم کنید.
+name: پیش‌نمایش Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/08_ui.js'
+      - 'tools/preview.js'
+      - '_worker.js'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: node build.js
+      - run: node tools/preview.js
+      - name: ساخت index
+        run: |
+          cd preview
+          cp panel-preview.html index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./preview
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

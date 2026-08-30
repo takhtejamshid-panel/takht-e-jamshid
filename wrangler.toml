@@ -1,0 +1,46 @@
+# =============================================================================
+#  تخت جمشید — پیکربندی Wrangler (روش استقرار اختیاری با CLI)
+#
+#  پیش از اجرای `wrangler deploy`:
+#    1. با دستور `wrangler d1 create takht-db` یک دیتابیس بسازید
+#    2. مقدار database_id را از خروجی آن دستور بردارید و زیر جایگزین کنید
+# =============================================================================
+
+name = "takht-e-jamshid"
+main = "_worker.js"
+compatibility_date = "2024-09-23"
+
+# انتشار روی آدرس workers.dev (برای استفاده از دامنه‌ی سفارشی، routes را تنظیم کنید)
+workers_dev = true
+
+# ثبت درخواست‌ها در Cloudflare Observability — برای اشکال‌زدایی مفید است
+# [observability]
+# enabled = true
+
+# اتصال دیتابیس D1 — نام متغیر باید دقیقاً DB باشد
+[[d1_databases]]
+binding = "DB"
+database_name = "takht-db"
+database_id = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"   # ← این را جایگزین کنید
+
+# -----------------------------------------------------------------------------
+#  نمونه تنظیمات پیشرفته (در صورت نیاز از حالت کامنت خارج کنید)
+# -----------------------------------------------------------------------------
+
+# اجرای Worker روی یک دامنه‌ی سفارشی
+# [[routes]]
+# pattern = "takht.example.com/*"
+# zone_name = "example.com"
+
+# متغیرهای محیطی (در صورت نیاز)
+# [vars]
+# TZ = "Asia/Tehran"
+
+# یک KV namespace برای کش کردن (در نسخه‌های بعد استفاده می‌شود)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+
+# اجرای زمان‌بندی‌شده برای پاک‌سازی گزارش‌های قدیمی
+# [triggers]
+# crons = ["0 3 * * *"]

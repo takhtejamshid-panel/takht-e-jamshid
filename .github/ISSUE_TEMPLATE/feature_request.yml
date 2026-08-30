@@ -1,0 +1,41 @@
+name: پیشنهاد ویژگی
+description: ایده‌ای برای بهتر شدن تخت جمشید دارید
+title: "[پیشنهاد] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: ایده چیست؟
+      description: یک توضیح کوتاه و روشن.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: چه مشکلی را حل می‌کند؟
+      description: الان بدون این ویژگی چه محدودیتی دارید؟
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: راه‌حل‌های جایگزین
+      description: اگر راه دیگری هم به نظرتان می‌رسد بنویسید.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: بخش مربوطه
+      options:
+        - هسته پروکسی (VLESS/Trojan)
+        - مدیریت کاربران
+        - تولید کانفیگ
+        - رابط کاربری
+        - ربات تلگرام
+        - مستندات
+        - سایر
+    validations:
+      required: true
