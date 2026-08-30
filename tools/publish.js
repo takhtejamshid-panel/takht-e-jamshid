@@ -66,7 +66,9 @@ if (!TOKEN) {
   fail('متغیر محیطی GITHUB_TOKEN تنظیم نشده است.\n'
      + '   مثال:  GITHUB_TOKEN=\'github_pat_...\' node tools/publish.js\n\n'
      + '   توصیه: یک Fine-grained token با دسترسی Contents (Read & write)\n'
-     + '          مخصوص همین مخزن بسازید و پس از انتشار آن را باطل کنید.');
+     + '          مخصوص همان مخزن بسازید و پس از انتشار آن را باطل کنید.\n\n'
+     + '   نکته: Fine-grained token نمی‌تواند مخزنِ جدید بسازد؛ ابتدا مخزن را\n'
+     + '         در github.com/new خالی ایجاد کنید (بدون README و LICENSE).');
 }
 
 console.log('\n🏛️  انتشار تخت جمشید روی گیت‌هاب\n' + '─'.repeat(46));
@@ -93,7 +95,9 @@ const scopes = (() => {
 if (scopes && !/\b(repo|public_repo)\b/.test(scopes)) {
   fail('توکن دسترسی لازم برای ساخت مخزن را ندارد.\n'
      + '   دسترسی‌های فعلی: ' + (scopes || '(none)') + '\n'
-     + '   دسترسیِ مورد نیاز: repo  (یا برای Fine-grained: Contents: Read & write)');
+     + '   دسترسیِ مورد نیاز: repo\n'
+     + '   راه بهتر: مخزن را خودتان در github.com/new خالی بسازید و\n'
+     + '   یک Fine-grained token با Contents: Read & write روی همان مخزن بدهید.');
 }
 
 /* ۳) ساخت مخزن (اگر وجود ندارد) */
