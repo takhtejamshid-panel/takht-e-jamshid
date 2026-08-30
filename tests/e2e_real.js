@@ -25,10 +25,15 @@ const HOST = process.argv[2] || process.env.E2E_HOST || 'takht-e2e-test.amirhesa
 const UUID = process.argv[3] || 'b1e0a2c4-6f8d-4a3b-9c2e-1d5f7a9b3c60';
 const PASS = process.argv[4] || 'e2e-test-pass';
 
-/* نکته: کلادفلر اتصالِ TCP به سایت‌هایی که خودش جلویشان است را نمی‌پذیرد
-   («cannot connect ... consider using fetch instead»). برای همین مقصدی
-   برمی‌گزینیم که پشتِ کلادفلر نباشد — وگرنه تست به‌اشتباه شکست می‌خورد. */
-const TARGET = process.env.E2E_TARGET || 'neverssl.com';
+/* انتخابِ مقصد دو شرط دارد:
+   ۱) پشتِ کلادفلر نباشد — چون کلادفلر اتصالِ TCP به سایت‌هایی که خودش
+      جلویشان است را نمی‌پذیرد («cannot connect ... consider using fetch»)
+      و آن‌وقت تست به‌اشتباه شکست می‌خورد.
+   ۲) از لبه سریع و پایدار باشد. اندازه‌گیری روی لبه (هر کدام ۸ تلاش):
+        debian.org   ۸/۸ ·   ۹ms
+        wikipedia.org ۸/۸ ·  ۵۳ms
+        neverssl.com ۷/۸ · ۱۸۶۸ms  ← کند و گاهی وقت‌بر؛ باعث نوسانِ تست می‌شود */
+const TARGET = process.env.E2E_TARGET || 'debian.org';
 const REQ = 'GET / HTTP/1.1\r\nHost: ' + TARGET + '\r\nUser-Agent: takht-e2e/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n';
 
 let pass = 0, fail = 0;
