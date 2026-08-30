@@ -1,6 +1,6 @@
 {
   "name": "takht-e-jamshid",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "تخت جمشید — پنل مدیریت پروکسی لبه‌ای روی Cloudflare Workers (VLESS / Trojan)",
   "main": "_worker.js",
   "scripts": {

@@ -1,6 +1,6 @@
 /* =============================================================================
  *  تخت جمشید | TAKHT-E JAMSHID — پنل لبه‌ای پارسه
- *  نسخه 0.1.0
+ *  نسخه 0.2.2
  *
  *  این فایل به‌صورت خودکار از پوشه‌ی src ساخته شده است؛ خودِ آن را ویرایش نکنید.
  *  جهت توسعه: فایل‌های src/ را تغییر دهید و `node build.js` را اجرا کنید.
@@ -1008,6 +1008,21 @@ function flagOf(country) {
   return found ? FLAGS[found] : '🏛️';
 }
 
+/* پورت‌هایی که کلادفلر روی آن‌ها فقط HTTPِ ساده می‌دهد (بدون TLS).
+   فرستادنِ دست‌تکانیِ TLS روی این پورت‌ها شکستِ کاملِ اتصال است —
+   کلاینت «کانفیگ کار نمی‌کند» می‌بیند، بی‌آنکه علت روشن باشد.
+
+   منبع: مستنداتِ کلادفلر (Network ports compatible with Cloudflare's proxy)
+     HTTP  : 80, 8080, 8880, 2052, 2082, 2086, 2095
+     HTTPS : 443, 2053, 2083, 2087, 2096, 8443
+*/
+const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095];
+
+/* آیا این پورت توانِ TLS دارد؟ پورت‌های ناشناس را به انتخابِ کاربر می‌سپاریم. */
+function portSupportsTls(port) {
+  return CF_PLAIN_PORTS.indexOf(Number(port)) < 0;
+}
+
 function buildPath(settings, userId) {
   const base = '/' + String(settings.route || 'takht').replace(/^\/+|\/+$/g, '');
   const suffix = userId ? '/' + encodeURIComponent(userId) : '';
@@ -1090,7 +1105,9 @@ function buildNodesForUser(user, settings, hostInfo) {
         const common = {
           address: target.address,
           port: Number(port),
-          tls: !!settings.tls,
+          /* TLS را برای هر پورت جداگانه حساب می‌کنیم: پورت ۸۰ روی کلادفلر
+             فقط HTTPِ ساده است و نوشتنِ security=tls برایش نودِ همیشه‌خراب می‌سازد. */
+          tls: !!settings.tls && portSupportsTls(port),
           sni: target.sni,
           allowInsecure: !!settings.allowInsecure,
           hostHeader: baseHost,
@@ -2161,9 +2178,12 @@ async function handleProxyRequest(request, env, ctx, settings, pathUser) {
 
   /* داده‌ی زودهنگام (early data) که کلاینت در هدر Sec-WebSocket-Protocol فرستاده */
   let earlyData = null;
+  let earlyProto = '';
   const protoHeader = request.headers.get('sec-websocket-protocol');
   if (protoHeader) {
-    try { earlyData = b64urlDecode(protoHeader.split(',')[0].trim()); } catch (e) { earlyData = null; }
+    const first = protoHeader.split(',')[0].trim();
+    earlyProto = first;
+    try { earlyData = b64urlDecode(first); } catch (e) { earlyData = null; }
   }
 
   const state = {
@@ -2334,7 +2354,14 @@ async function handleProxyRequest(request, env, ctx, settings, pathUser) {
 
   readable.pipeTo(writable).catch(() => remoteClose());
 
-  return new Response(null, { status: 101, webSocket: client });
+  /* پژواکِ زیرپروتکل: اگر کلاینت Sec-WebSocket-Protocol فرستاده باشد (مثلاً برای
+     early data) و سرور آن را در پاسخ برنگرداند، کلاینت‌های سخت‌گیر — از جمله
+     sing-box و برخی نسخه‌های v2rayNG — اتصال را همان‌جا رد می‌کنند و کاربر
+     فقط «وصل نمی‌شود» می‌بیند. همان نخستین مقدار را بازمی‌گردانیم. */
+  const respHeaders = {};
+  if (earlyProto) respHeaders['Sec-WebSocket-Protocol'] = earlyProto;
+
+  return new Response(null, { status: 101, webSocket: client, headers: respHeaders });
 }
 
 /* پردازش بسته‌های UDP (در عمل: DNS روی HTTPS) */

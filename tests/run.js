@@ -251,6 +251,56 @@ section('نحویِ اسکریپتِ سمتِ کلاینت');
     ok('transport ws با early data تنظیم شده',
       sb && sb.outbounds.some(o => o.transport && o.transport.type === 'ws' && o.transport.max_early_data === 2048));
 
+    /* ---------------------------------------------------------------- */
+    section('TLS بر پایه‌ی پورت (رفعِ نودهای همیشه‌خراب)');
+    /* کلادفلر روی پورت ۸۰ فقط HTTPِ ساده می‌دهد؛ نوشتنِ security=tls برای آن
+       باعث می‌شود کلاینت دست‌تکانیِ TLS بفرستد و اتصال کاملاً شکست بخورد. */
+    const lines = decoded.split('\n').filter(Boolean);
+    const nodeOf = (port) => lines.filter(l => new RegExp(':(?:' + port + ')\\?').test(l));
+    const secOf = (l) => (l.match(/security=([a-z]+)/) || [])[1];
+
+    const n80 = nodeOf(80);
+    const n443 = nodeOf(443);
+    ok('برای هر پروتکل یک نود روی پورت ۸۰ هست', n80.length === 2, 'تعداد=' + n80.length);
+    ok('پورت ۸۰ بدون TLS است',
+      n80.length === 2 && n80.every(l => secOf(l) === 'none'),
+      n80.map(secOf).join(','));
+    ok('پورت ۴۴۳ با TLS است',
+      n443.length === 2 && n443.every(l => secOf(l) === 'tls'),
+      n443.map(secOf).join(','));
+    /* پورت‌های HTTPSِ پشتیبانی‌شده‌ی کلادفلر باید TLS داشته باشند */
+    for (const p of [2053, 2083, 2087, 2096, 8443]) {
+      const ns = nodeOf(p);
+      ok('پورت ' + p + ' با TLS است',
+        ns.length === 2 && ns.every(l => secOf(l) === 'tls'), ns.map(secOf).join(','));
+    }
+    ok('لینکِ بدون TLS پارامتر sni/fp ندارد',
+      n80.every(l => !l.includes('sni=') && !l.includes('fp=')),
+      n80[0] || '');
+
+    /* Clash و Sing-box هم باید همین را رعایت کنند */
+    const yamlLines = yaml.split('\n');
+    let clashPort = null, clashTls = null, found80 = false;
+    for (let i = 0; i < yamlLines.length; i++) {
+      const m = yamlLines[i].match(/^\s+port:\s*(\d+)\s*$/);
+      if (m) { clashPort = Number(m[1]); clashTls = null; }
+      const t = yamlLines[i].match(/^\s+tls:\s*(true|false)\s*$/);
+      if (t && clashPort !== null) {
+        clashTls = t[1] === 'true';
+        if (clashPort === 80) { found80 = true; ok('Clash: پورت ۸۰ بدون TLS است', clashTls === false); }
+        clashPort = null;
+      }
+    }
+    ok('Clash نودِ پورت ۸۰ را دارد', found80);
+
+    const sb80 = (sb.outbounds || []).filter(o => o.server_port === 80);
+    ok('Sing-box نودِ پورت ۸۰ را دارد', sb80.length === 2, 'تعداد=' + sb80.length);
+    ok('Sing-box برای پورت ۸۰ بلوکِ tls نمی‌سازد',
+      sb80.length === 2 && sb80.every(o => !o.tls),
+      JSON.stringify(sb80.map(o => !!o.tls)));
+    ok('Sing-box برای پورت ۴۴۳ بلوکِ tls دارد',
+      (sb.outbounds || []).filter(o => o.server_port === 443).every(o => o.tls && o.tls.enabled === true));
+
     r = await reqAbs(subUrl + '?format=raw');
     let raw = await r.text();
     ok('خروجی متن خام تولید می‌شود', raw.split('\n').length >= 2 && raw.includes('vless://'));
@@ -423,6 +473,33 @@ section('نحویِ اسکریپتِ سمتِ کلاینت');
       headers: { upgrade: 'websocket', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', connection: 'Upgrade' },
     });
     ok('ارتقا به WebSocket پذیرفته می‌شود', wsRes.status === 101 && !!wsRes.webSocket, 'status=' + wsRes.status);
+
+    /* پژواکِ زیرپروتکل: اگر کلاینت Sec-WebSocket-Protocol بفرستد (برای early data)
+       و سرور آن را برنگرداند، کلاینت‌های سخت‌گیر اتصال را رد می‌کنند. */
+    const edProto = Buffer.from('EARLY-DATA-TEST').toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const wsEd = await req('/persepolis', {
+      headers: {
+        upgrade: 'websocket',
+        'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+        connection: 'Upgrade',
+        'sec-websocket-protocol': edProto,
+      },
+    });
+    ok('ارتقا با Sec-WebSocket-Protocol پذیرفته می‌شود', wsEd.status === 101, 'status=' + wsEd.status);
+    ok('زیرپروتکل در پاسخ پژواک می‌شود',
+      (wsEd.headers.get('sec-websocket-protocol') || '') === edProto,
+      'دریافت‌شده: ' + JSON.stringify(wsEd.headers.get('sec-websocket-protocol')));
+    if (wsEd.webSocket) { try { wsEd.webSocket.close(); } catch (e) {} }
+
+    /* بدون زیرپروتکل نباید چیزی برگردد */
+    const wsPlain = await req('/persepolis', {
+      headers: { upgrade: 'websocket', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', connection: 'Upgrade' },
+    });
+    ok('بدون زیرپروتکل، هدرِ اضافه‌ای فرستاده نمی‌شود',
+      wsPlain.status === 101 && !wsPlain.headers.get('sec-websocket-protocol'),
+      String(wsPlain.headers.get('sec-websocket-protocol')));
+    if (wsPlain.webSocket) { try { wsPlain.webSocket.close(); } catch (e) {} }
 
     if (wsRes.webSocket) {
       const ws = wsRes.webSocket;

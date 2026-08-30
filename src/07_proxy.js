@@ -280,9 +280,12 @@ async function handleProxyRequest(request, env, ctx, settings, pathUser) {
 
   /* داده‌ی زودهنگام (early data) که کلاینت در هدر Sec-WebSocket-Protocol فرستاده */
   let earlyData = null;
+  let earlyProto = '';
   const protoHeader = request.headers.get('sec-websocket-protocol');
   if (protoHeader) {
-    try { earlyData = b64urlDecode(protoHeader.split(',')[0].trim()); } catch (e) { earlyData = null; }
+    const first = protoHeader.split(',')[0].trim();
+    earlyProto = first;
+    try { earlyData = b64urlDecode(first); } catch (e) { earlyData = null; }
   }
 
   const state = {
@@ -453,7 +456,14 @@ async function handleProxyRequest(request, env, ctx, settings, pathUser) {
 
   readable.pipeTo(writable).catch(() => remoteClose());
 
-  return new Response(null, { status: 101, webSocket: client });
+  /* پژواکِ زیرپروتکل: اگر کلاینت Sec-WebSocket-Protocol فرستاده باشد (مثلاً برای
+     early data) و سرور آن را در پاسخ برنگرداند، کلاینت‌های سخت‌گیر — از جمله
+     sing-box و برخی نسخه‌های v2rayNG — اتصال را همان‌جا رد می‌کنند و کاربر
+     فقط «وصل نمی‌شود» می‌بیند. همان نخستین مقدار را بازمی‌گردانیم. */
+  const respHeaders = {};
+  if (earlyProto) respHeaders['Sec-WebSocket-Protocol'] = earlyProto;
+
+  return new Response(null, { status: 101, webSocket: client, headers: respHeaders });
 }
 
 /* پردازش بسته‌های UDP (در عمل: DNS روی HTTPS) */

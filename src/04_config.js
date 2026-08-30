@@ -52,6 +52,21 @@ function flagOf(country) {
   return found ? FLAGS[found] : '🏛️';
 }
 
+/* پورت‌هایی که کلادفلر روی آن‌ها فقط HTTPِ ساده می‌دهد (بدون TLS).
+   فرستادنِ دست‌تکانیِ TLS روی این پورت‌ها شکستِ کاملِ اتصال است —
+   کلاینت «کانفیگ کار نمی‌کند» می‌بیند، بی‌آنکه علت روشن باشد.
+
+   منبع: مستنداتِ کلادفلر (Network ports compatible with Cloudflare's proxy)
+     HTTP  : 80, 8080, 8880, 2052, 2082, 2086, 2095
+     HTTPS : 443, 2053, 2083, 2087, 2096, 8443
+*/
+const CF_PLAIN_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095];
+
+/* آیا این پورت توانِ TLS دارد؟ پورت‌های ناشناس را به انتخابِ کاربر می‌سپاریم. */
+function portSupportsTls(port) {
+  return CF_PLAIN_PORTS.indexOf(Number(port)) < 0;
+}
+
 function buildPath(settings, userId) {
   const base = '/' + String(settings.route || 'takht').replace(/^\/+|\/+$/g, '');
   const suffix = userId ? '/' + encodeURIComponent(userId) : '';
@@ -134,7 +149,9 @@ function buildNodesForUser(user, settings, hostInfo) {
         const common = {
           address: target.address,
           port: Number(port),
-          tls: !!settings.tls,
+          /* TLS را برای هر پورت جداگانه حساب می‌کنیم: پورت ۸۰ روی کلادفلر
+             فقط HTTPِ ساده است و نوشتنِ security=tls برایش نودِ همیشه‌خراب می‌سازد. */
+          tls: !!settings.tls && portSupportsTls(port),
           sni: target.sni,
           allowInsecure: !!settings.allowInsecure,
           hostHeader: baseHost,
