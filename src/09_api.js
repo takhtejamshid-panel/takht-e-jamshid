@@ -35,8 +35,11 @@ function setSessionCookie(value) {
   return COOKIE + '=' + encodeURIComponent(value) + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=' + Math.floor(SESSION_TTL / 1000);
 }
 
-async function checkPassword(settings, password) {
-  if (!settings.panelPassHash) return String(password) === 'admin';
+async function checkPassword(settings, password, env) {
+  if (!settings.panelPassHash) {
+    const boot = String((env && env.PANEL_PASS) || '').trim() || 'admin';
+    return String(password) === boot;
+  }
   const hash = await sha256(String(password) + (settings.passSalt || ''), true);
   return hash === settings.panelPassHash;
 }

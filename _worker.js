@@ -669,7 +669,10 @@ async function getSettings(env) {
   // نخستین اجرا: تنظیمات پیش‌فرض را ذخیره کن
   const fresh = Object.assign({}, DEFAULT_SETTINGS);
   fresh.passSalt = randomToken(8);
-  fresh.panelPassHash = await sha256('admin' + fresh.passSalt, true);
+  /* اگر متغیر محیطیِ PANEL_PASS تنظیم شده باشد (مثلاً توسط باتِ نصاب)،
+     به‌جای گذرواژه‌ی پیش‌فرضِ «admin» همان به‌عنوان گذرواژه‌ی آغازین به‌کار می‌رود. */
+  const bootPass = String((env && env.PANEL_PASS) || '').trim() || 'admin';
+  fresh.panelPassHash = await sha256(bootPass + fresh.passSalt, true);
   try {
     await d.prepare(
       'INSERT OR REPLACE INTO settings (id, data, updated_at) VALUES (1, ?, ?)'
@@ -3223,8 +3226,11 @@ function setSessionCookie(value) {
   return COOKIE + '=' + encodeURIComponent(value) + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=' + Math.floor(SESSION_TTL / 1000);
 }
 
-async function checkPassword(settings, password) {
-  if (!settings.panelPassHash) return String(password) === 'admin';
+async function checkPassword(settings, password, env) {
+  if (!settings.panelPassHash) {
+    const boot = String((env && env.PANEL_PASS) || '').trim() || 'admin';
+    return String(password) === boot;
+  }
   const hash = await sha256(String(password) + (settings.passSalt || ''), true);
   return hash === settings.panelPassHash;
 }
@@ -3545,7 +3551,7 @@ export default {
         const user = form ? String(form.get('user') || '') : '';
         const pass = form ? String(form.get('pass') || '') : '';
         const okUser = user === (settings.panelUser || 'admin') || user === 'admin';
-        const okPass = await checkPassword(settings, pass);
+        const okPass = await checkPassword(settings, pass, env);
         if (okUser && okPass) {
           const sid = await makeSession(settings, user);
           await addLog(env, 'info', 'ورود موفق به پنل از ' + (request.headers.get('cf-connecting-ip') || 'ناشناس'), user);

@@ -109,7 +109,10 @@ async function getSettings(env) {
   // نخستین اجرا: تنظیمات پیش‌فرض را ذخیره کن
   const fresh = Object.assign({}, DEFAULT_SETTINGS);
   fresh.passSalt = randomToken(8);
-  fresh.panelPassHash = await sha256('admin' + fresh.passSalt, true);
+  /* اگر متغیر محیطیِ PANEL_PASS تنظیم شده باشد (مثلاً توسط باتِ نصاب)،
+     به‌جای گذرواژه‌ی پیش‌فرضِ «admin» همان به‌عنوان گذرواژه‌ی آغازین به‌کار می‌رود. */
+  const bootPass = String((env && env.PANEL_PASS) || '').trim() || 'admin';
+  fresh.panelPassHash = await sha256(bootPass + fresh.passSalt, true);
   try {
     await d.prepare(
       'INSERT OR REPLACE INTO settings (id, data, updated_at) VALUES (1, ?, ?)'

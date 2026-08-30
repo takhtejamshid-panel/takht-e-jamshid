@@ -100,7 +100,7 @@ export default {
         const user = form ? String(form.get('user') || '') : '';
         const pass = form ? String(form.get('pass') || '') : '';
         const okUser = user === (settings.panelUser || 'admin') || user === 'admin';
-        const okPass = await checkPassword(settings, pass);
+        const okPass = await checkPassword(settings, pass, env);
         if (okUser && okPass) {
           const sid = await makeSession(settings, user);
           await addLog(env, 'info', 'ورود موفق به پنل از ' + (request.headers.get('cf-connecting-ip') || 'ناشناس'), user);
